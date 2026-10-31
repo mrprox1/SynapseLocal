@@ -1,113 +1,97 @@
 # SynapseLocal
 
-A local-first desktop app for a folder of Markdown files. Open a project folder and get three views over the same `.md` files:
+A local-first desktop app for the markdown files in a project folder: a linked knowledge base, a Kanban board, and a plain file explorer, all working on the same `.md` files on disk. Built with Tauri v2, React and TypeScript.
 
-- **Docs**: a wiki for your docs folder, with `[[wiki links]]`, backlinks, a link graph and preview.
-- **Board**: a Kanban board where each ticket is a Markdown file and its column is the `status` in its frontmatter.
-- **Files**: a file tree and a plain editor for every other `.md` file, with a focus mode.
+Nothing is stored in a database. Every view reads and writes ordinary markdown files, so the folder works just as well in VS Code, git or any other editor. Edits made outside the app show up within about a second.
 
-Everything stays as plain files on disk. There is no database or sync, and no account. Edits made in another editor or by `git pull` show up within about a second.
+## Features
 
-Built with Tauri 2, React, TypeScript and CodeMirror 6.
+### Workspace
+- Open any folder. The last one opened is reopened on launch.
+- Every `.md` file is sorted into one of three groups:
+  - **Docs**: files under the docs folder (default `docs/`)
+  - **Tickets**: files under the tickets folder (default `tickets/`)
+  - **Other**: everything else
+- `.git/`, `node_modules/` and dot-folders are skipped.
+- Live reload: a file watcher re-indexes when files change on disk.
+- A shared CodeMirror 6 editor. It saves 500 ms after you stop typing and when it loses focus, and keeps the file's formatting and line endings (CRLF stays CRLF).
+- Light, dark or system theme.
 
-## Getting started
+### Docs and knowledge base
+- Doc tree with new, rename and delete.
+- `[[Wiki links]]` and `[[Target|alias]]`. Typing `[[` autocompletes doc and ticket names. Ctrl/Cmd+click opens the target, or creates it if it doesn't exist yet.
+- Preview toggle (Ctrl/Cmd+E): GitHub-flavoured markdown (tables, task lists), `$math$` via KaTeX, syntax highlighting, and images resolved relative to the file.
+- Backlinks panel: every file that links to the current doc, with the surrounding line.
+- Graph view: docs as nodes, links as edges. Click a node to open the doc.
+- Renaming a doc can update `[[Old Name]]` links in every other file (you confirm first).
 
-Prerequisites: [Node.js](https://nodejs.org/) and the [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/) (Rust, plus WebView2 on Windows, or the Xcode Command Line Tools on macOS: `xcode-select --install`).
+### Task board (Kanban)
+- Each ticket file is a card. The frontmatter `status` picks the column:
 
-```sh
-npm install
-npm run tauri dev     # run the app
-npm run tauri build   # build an installer
-npm test              # unit tests (Vitest)
-```
+  ```markdown
+  ---
+  title: Fix login bug
+  status: todo          # backlog | todo | in-progress | done
+  priority: high        # low | medium | high (optional)
+  assignee: me          # optional
+  ---
+  Notes, sub-tasks (- [ ] ...), [[Doc Links]].
+  ```
 
-Click **Open folder** and pick a project folder. The app reopens the last folder on launch.
+  A missing or unknown status puts the card in **Backlog**.
+- Drag and drop between and within columns, mouse or keyboard. A drop changes only the `status` (and `order`) lines in the file. Other keys and comments stay exactly as they were.
+- Cards show priority, assignee and sub-task progress (`2/5`).
+- Ticket modal: edit title, status, priority, assignee and the body.
+- A "+" button on each column creates a new ticket. A filter bar narrows cards by priority and assignee.
+- **Archive**: Done tickets can be archived one at a time, or all at once with "Archive all" (it respects the active filter). Archiving moves the file to `<ticketsDir>/archive/` without changing its content. Links to it keep working, and archived links show as `Archive: <name>`. "Show archived" displays them dimmed, with a **Restore** button.
 
-### macOS
+### Files (explorer)
+- A tree of all **Other** markdown files, with new file, new folder, rename and delete. Delete sends the file to the OS trash.
+- "Move to Docs" / "Move to Tickets" to promote a scratch note.
+- Focus mode: hides the sidebar and centres the text. Esc leaves it.
 
-Requires macOS 13 or later. Build on a Mac; you can't build a macOS app from Windows. To get one `.dmg` that runs on both Apple Silicon and Intel:
+### Source control (git)
+Only shown when the workspace is inside a git repo and `git` is on PATH.
+- Changed files are coloured in the trees with `M` / `A` / `U` / `D`, VS Code style.
+- A Source Control view with a change-count badge, a commit message box and a list of changes with checkboxes to choose which files go into the commit. Ctrl/Cmd+Enter commits.
+- Click a changed `.md` file to see its unified diff.
+- In a subfolder workspace, only files under that folder are committed.
 
-```sh
-rustup target add aarch64-apple-darwin x86_64-apple-darwin
-npm run tauri build -- --target universal-apple-darwin
-```
+### Command palette and search
+- **Ctrl/Cmd+P**: fuzzy-jump to any doc, ticket or file. With an empty query, recently opened files come first.
+- **Ctrl/Cmd+Shift+P** (or type `>`): commands. Go to a view, new doc or ticket, toggle theme, open folder, toggle graph or focus mode, search in files.
+- **Ctrl/Cmd+Shift+F**: full-text search across all files, frontmatter included. All words must match, and `"quoted phrases"` match exactly. Scope chips: All / Docs / Tickets / Files. Opening a result scrolls the editor to the matching line.
 
-The `.dmg` ends up in `src-tauri/target/universal-apple-darwin/release/bundle/dmg/`.
+### Claude Code chat
+- **Ctrl/Cmd+L** opens a chat panel that runs your installed [Claude Code](https://docs.claude.com/en/docs/claude-code) CLI in headless mode, inside the workspace folder.
+- Claude can read and edit workspace files, and its edits show up live. It is limited to the file tools (Read, Edit, Write, Glob, Grep): no Bash, no web, no MCP servers. Edits are accepted automatically, so use git to undo them.
+- Tool calls appear as collapsible lines, and file paths in them are clickable. A "current file" chip tells Claude which file you're looking at.
+- Follow-up messages continue the same conversation. **New chat** starts over, and **Stop** cancels a run.
+- Login, model and billing come from your own Claude Code setup. The app stores no API keys.
 
-The app isn't notarized by Apple. If a copy was downloaded or copied over from another Mac, macOS blocks the first launch. Right-click the app and choose **Open**, or allow it under **System Settings → Privacy & Security → Open Anyway**. If neither works:
+### Settings
+- Change the docs and tickets folders (saved to `.synapse.json` in the workspace, so the setting travels with the project). Nested folders are allowed, e.g. `docs/tasks`, and the deeper folder wins.
+- Theme: System / Light / Dark.
+- Shows the workspace path, with "Reveal in Explorer".
 
-```sh
-xattr -dr com.apple.quarantine /Applications/SynapseLocal.app
-```
+## Configuration
 
-Where a shortcut below says **Ctrl/Cmd**, use **Cmd** on a Mac. Ctrl+click there is a right-click.
-
-## How files are sorted
-
-Every `.md` file in the folder falls into one of three groups, by its location:
-
-| Location | Shown in |
-|---|---|
-| `docs/` | Docs view and graph |
-| `tickets/` | Board |
-| anywhere else | Files view |
-
-The app skips `.git/`, `node_modules/` and dot-folders.
-
-To use different folders, add `.synapse.json` to the project root:
+Optional `.synapse.json` in the workspace root (it can also be edited from Settings):
 
 ```json
-{ "docsDir": "wiki", "ticketsDir": "tasks" }
+{ "docsDir": "docs", "ticketsDir": "tickets" }
 ```
 
-## Docs
+## Development
 
-- Type `[[` to get suggestions from existing docs. **Ctrl/Cmd+click** a link to open it. A link to a missing doc is shown dashed, and Ctrl/Cmd+clicking it creates the doc.
-- A link `[[Name]]` matches a file by its name (ignoring case, without `.md`), and falls back to the doc's title. Use `[[Name|label]]` to show different text.
-- **Ctrl/Cmd+E** switches between the editor and the preview. The preview renders tables, task lists, `$math$`, code highlighting and images relative to the file.
-- The backlinks panel lists every file that links to the open doc, with the line around the link.
-- **Graph** shows all docs and the links between them. Click a node to open that doc.
-- **Rename** renames the file and offers to update the links that point to it.
+Prerequisites: [Node.js](https://nodejs.org/), [Rust](https://rustup.rs/), and the [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS. Optional: `git` (source control) and `claude` (chat) on PATH.
 
-## Board
-
-A ticket is a Markdown file in the tickets folder:
-
-```markdown
----
-title: Fix login bug
-status: todo        # backlog | todo | in-progress | done
-priority: high      # low | medium | high (optional)
-assignee: me        # optional
----
-Notes, sub-tasks (- [ ] ...) and [[Doc Links]].
+```bash
+npm install
+npm run tauri dev     # run the app
+npm test              # unit tests (vitest)
+npm run tauri build   # build an installer
 ```
 
-- A ticket with a missing or unknown `status` goes in **Backlog**. The file isn't changed until you move the card.
-- Drag a card to move it, or use the keyboard: **Space** picks a card up, the arrow keys move it and **Space** drops it. On drop, the app changes only the `status` and `order` lines. The rest of the file, including comments and key order, stays exactly as it was.
-- Click a card, or press **Enter** on it, to edit its title, status, priority, assignee and body.
-- **+** on a column creates a new ticket in that column. Use the filter bar to show tickets by priority or assignee.
+The app is developed and tested on Windows. macOS support is planned (`docs/plans/11-macos.md`).
 
-## Files
-
-- Use the buttons for a new file or new folder. Right-click a file to **Rename**, **Delete** (moves it to the OS trash), or **Move to Docs** / **Move to Tickets**.
-- **Focus** hides the sidebars and keeps the text at a readable width. Press **Esc** to leave.
-
-## Security
-
-The app can only read and write inside the folder you open. Access is granted at runtime when you open or reopen a folder; there are no file permissions beyond that.
-
-## Project layout
-
-```
-src/
-  lib/          parsing, frontmatter edits, board and tree logic (unit-tested)
-  store/        Zustand stores: workspace index and file I/O, UI state
-  components/   shared Markdown editor and preview
-  views/        docs/, board/, explorer/
-src-tauri/      Rust shell: workspace access and trash commands
-```
-
-## License
-
-[MIT](LICENSE)

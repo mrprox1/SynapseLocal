@@ -4,7 +4,7 @@ import { categorize, DEFAULT_CONFIG, parseConfig, relativeTo, sanitizeName, vali
 describe("parseConfig", () => {
   it("defaults when missing, partial, or invalid", () => {
     expect(parseConfig(null)).toEqual(DEFAULT_CONFIG);
-    expect(parseConfig('{"docsDir":"wiki/"}')).toEqual({ docsDir: "wiki", ticketsDir: "tickets" });
+    expect(parseConfig('{"docsDir":"wiki/"}')).toEqual({ ...DEFAULT_CONFIG, docsDir: "wiki" });
     vi.spyOn(console, "warn").mockImplementation(() => {});
     expect(parseConfig("{nope")).toEqual(DEFAULT_CONFIG);
   });

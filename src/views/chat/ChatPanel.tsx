@@ -39,6 +39,30 @@ function ToolLine({ m }: { m: Extract<Msg, { role: "tool" }> }) {
   );
 }
 
+/** `Changed 3 files:` with each path linking to its diff (if uncommitted) or the file. */
+function Changes({ paths }: { paths: string[] }) {
+  const files = useWorkspace((s) => s.files);
+  const gitFiles = useWorkspace((s) => s.git?.files);
+  return (
+    <div className="text-xs">
+      <div className="text-muted-foreground">Changed {paths.length} {paths.length === 1 ? "file" : "files"}:</div>
+      {paths.map((p) =>
+        gitFiles?.[p] || files[p] ? (
+          <button
+            key={p}
+            className="block max-w-full truncate text-blue-600 underline dark:text-blue-400"
+            onClick={() => (gitFiles?.[p] ? useUi.setState({ view: "git", selected: p }) : useUi.getState().openPath(p))}
+          >
+            {p}
+          </button>
+        ) : (
+          <div key={p} className="truncate">{p}</div>
+        ),
+      )}
+    </div>
+  );
+}
+
 export function ChatPanel() {
   const { messages, running, error, send, stop, reset } = useChat();
   const [text, setText] = useState("");
@@ -82,6 +106,8 @@ export function ChatPanel() {
             <div key={i} className="prose-preview"><MarkdownBody body={m.text} path="" onLink={openLink} /></div>
           ) : m.role === "tool" ? (
             <ToolLine key={i} m={m} />
+          ) : m.role === "changes" ? (
+            <Changes key={i} paths={m.paths} />
           ) : m.raw ? (
             <details key={i} className="text-xs text-muted-foreground">
               <summary className="cursor-pointer">Unknown event</summary>

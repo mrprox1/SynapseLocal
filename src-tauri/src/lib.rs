@@ -20,16 +20,20 @@ fn allow_workspace(app: AppHandle, path: String) -> Result<(), String> {
 /// and `root` must be an allowed workspace.
 #[tauri::command]
 fn move_to_trash(app: AppHandle, root: String, rel: String) -> Result<(), String> {
+    trash_inside(&app, &root, &rel)
+}
+
+fn trash_inside(app: &AppHandle, root: &str, rel: &str) -> Result<(), String> {
     let rel = Path::new(&rel);
     if rel.components().any(|c| !matches!(c, Component::Normal(_))) {
         return Err("path must be relative to the workspace".into());
     }
-    let full = Path::new(&root).join(rel);
+    let full = Path::new(root).join(rel);
     if !app.fs_scope().is_allowed(&full) {
         return Err("path is outside the workspace".into());
     }
     let inside = full.canonicalize().map_err(|e| e.to_string())?.starts_with(
-        Path::new(&root).canonicalize().map_err(|e| e.to_string())?,
+        Path::new(root).canonicalize().map_err(|e| e.to_string())?,
     );
     if !inside {
         return Err("path is outside the workspace".into());
@@ -44,6 +48,8 @@ fn reveal_workspace(app: AppHandle, path: String) -> Result<(), String> {
         return Err("path is outside the workspace".into());
     }
     let opener = if cfg!(windows) { "explorer" } else if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
+    // explorer ignores forward-slash paths and opens Documents instead
+    let path = if cfg!(windows) { path.replace('/', "\\") } else { path };
     std::process::Command::new(opener).arg(&path).spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
@@ -102,19 +108,24 @@ fn git_commit(app: AppHandle, root: String, message: String, paths: Vec<String>)
     Ok(())
 }
 
-/// Unified diff of one workspace-relative `path` against HEAD; untracked files diff as fully added.
+/// Unified diff of one workspace-relative `path` against HEAD; untracked files (or any file before
+/// the first commit) diff as fully added.
 #[tauri::command]
 fn git_diff(app: AppHandle, root: String, path: String) -> Result<String, String> {
     if !app.fs_scope().is_allowed(&root) {
         return Err("path is outside the workspace".into());
     }
+    // --no-index reads any file, so keep `path` inside the workspace
+    if Path::new(&path).components().any(|c| !matches!(c, Component::Normal(_))) {
+        return Err("path must be relative to the workspace".into());
+    }
     let ok = |args: &[&str]| git(&root, args).map(|o| o.status.success()).unwrap_or(false);
-    let args: Vec<&str> = if !ok(&["--literal-pathspecs", "ls-files", "--error-unmatch", "--", &path]) {
-        vec!["--literal-pathspecs", "diff", "--no-index", "--", "/dev/null", &path]
-    } else if ok(&["rev-parse", "--verify", "-q", "HEAD"]) {
+    let args: Vec<&str> = if ok(&["rev-parse", "--verify", "-q", "HEAD"])
+        && ok(&["--literal-pathspecs", "ls-files", "--error-unmatch", "--", &path])
+    {
         vec!["--literal-pathspecs", "diff", "HEAD", "--", &path]
     } else {
-        vec!["--literal-pathspecs", "diff", "--", &path]
+        vec!["--literal-pathspecs", "diff", "--no-index", "--", "/dev/null", &path]
     };
     let o = git(&root, &args).map_err(|e| e.to_string())?;
     // --no-index exits 1 when the files differ
@@ -122,6 +133,33 @@ fn git_diff(app: AppHandle, root: String, path: String) -> Result<String, String
         return Err(String::from_utf8_lossy(&o.stderr).trim().to_string());
     }
     Ok(String::from_utf8_lossy(&o.stdout).into_owned())
+}
+
+/// Throw away uncommitted changes to one workspace-relative `path`: back to HEAD when HEAD has it,
+/// otherwise unstage it and send the file to the trash.
+#[tauri::command]
+fn git_discard(app: AppHandle, root: String, path: String) -> Result<(), String> {
+    if !app.fs_scope().is_allowed(&root) {
+        return Err("path is outside the workspace".into());
+    }
+    if Path::new(&path).components().any(|c| !matches!(c, Component::Normal(_))) {
+        return Err("path must be relative to the workspace".into());
+    }
+    let ok = |args: &[&str]| git(&root, args).map(|o| o.status.success()).unwrap_or(false);
+    let in_head = ok(&["rev-parse", "--verify", "-q", "HEAD"]) && ok(&["cat-file", "-e", &format!("HEAD:./{path}")]);
+    let args = if in_head {
+        vec!["--literal-pathspecs", "restore", "--source=HEAD", "--staged", "--worktree", "--", &path]
+    } else {
+        vec!["--literal-pathspecs", "rm", "--cached", "-q", "--ignore-unmatch", "--", &path]
+    };
+    let o = git(&root, &args).map_err(|e| e.to_string())?;
+    if !o.status.success() {
+        return Err(String::from_utf8_lossy(&o.stderr).trim().to_string());
+    }
+    if !in_head && Path::new(&root).join(&path).exists() {
+        trash_inside(&app, &root, &path)?;
+    }
+    Ok(())
 }
 
 /// The running `claude` child, if any (one chat run at a time).
@@ -207,7 +245,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![allow_workspace, move_to_trash, reveal_workspace, git_status, git_commit, git_diff, claude_run, claude_stop])
+        .invoke_handler(tauri::generate_handler![allow_workspace, move_to_trash, reveal_workspace, git_status, git_commit, git_diff, git_discard, claude_run, claude_stop])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

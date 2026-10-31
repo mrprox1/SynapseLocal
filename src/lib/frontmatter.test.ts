@@ -56,3 +56,7 @@ describe("removeFrontmatterKey", () => {
     expect(removeFrontmatterKey("no fm", "a")).toBe("no fm");
   });
 });
+
+it("writes due_date unquoted", () => {
+  expect(setFrontmatterKey("---\ntitle: A\n---\n", "due_date", "2026-06-01")).toBe("---\ntitle: A\ndue_date: 2026-06-01\n---\n");
+});

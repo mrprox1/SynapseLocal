@@ -4,6 +4,13 @@ export const STATUSES = [
   { id: "in-progress", label: "In Progress" },
   { id: "done", label: "Done" },
 ] as const;
+/** Soft per-status color for column headers and the ticket's status field. */
+export const STATUS_TINT: Record<string, string> = {
+  backlog: "bg-slate-500/15",
+  todo: "bg-blue-500/15",
+  "in-progress": "bg-amber-500/15",
+  done: "bg-green-500/15",
+};
 export type Status = (typeof STATUSES)[number]["id"];
 export const PRIORITIES = ["low", "medium", "high"] as const;
 
@@ -82,3 +89,46 @@ export const restorePath = (path: string, ticketsDir: string) => `${ticketsDir}/
 
 /** Label shown for a link to `path`. */
 export const linkLabel = (label: string, archived: boolean) => (archived ? `Archive: ${label}` : label);
+
+const pad = (n: number) => String(n).padStart(2, "0");
+export const localDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+/** `YYYY-MM-DD` string (or a Date, if the YAML parser made one); anything else is ignored. */
+export const ticketDue = (fm: Record<string, unknown>) => dateKey(fm.due_date);
+export const ticketArchivedAt = (fm: Record<string, unknown>) => dateKey(fm.archived_at);
+
+function dateKey(v: unknown): string | undefined {
+  if (v instanceof Date) return Number.isNaN(+v) ? undefined : v.toISOString().slice(0, 10); // YAML dates are UTC
+  return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined;
+}
+
+/** `today` is a local `YYYY-MM-DD`. Done tickets are never due. */
+export const dueState = (due: string | undefined, status: Status, today: string) =>
+  !due || status === "done" ? undefined : due < today ? "overdue" : due === today ? "today" : undefined;
+
+/** Not done and due within `days` days of `today` (overdue included): gets the red border. */
+export function dueNear(due: string | undefined, status: Status, today: string, days: number) {
+  if (!due || status === "done") return false;
+  const [y, m, d] = today.split("-").map(Number);
+  return due <= localDate(new Date(y, m - 1, d + days));
+}
+
+/** Archived cards grouped by `archivedAt`, newest day first; cards without a date go last under `""`. */
+export function groupArchived<T extends { path: string; archivedAt?: string }>(cards: T[]) {
+  const by = new Map<string, T[]>();
+  for (const c of [...cards].sort((a, b) => a.path.localeCompare(b.path))) {
+    const k = c.archivedAt ?? "";
+    by.set(k, [...(by.get(k) ?? []), c]);
+  }
+  return [...by].sort(([a], [b]) => (a && b ? b.localeCompare(a) : a ? -1 : b ? 1 : 0));
+}
+
+/** `Jun 1`, with the year when it isn't the current one. */
+export function dueLabel(due: string, today: string) {
+  const [y, m, d] = due.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    ...(due.slice(0, 4) !== today.slice(0, 4) && { year: "numeric" }),
+  });
+}

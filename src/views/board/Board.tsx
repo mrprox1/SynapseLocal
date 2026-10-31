@@ -13,12 +13,12 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { archivePath, isArchived, matchesFilter, restorePath, placeCard, sortCards, STATUSES, subtasks, ticketOrder, ticketStatus, type Status } from "@/lib/board";
-import { setFrontmatterKey } from "@/lib/frontmatter";
+import { archivePath, groupArchived, localDate, isArchived, matchesFilter, restorePath, placeCard, sortCards, STATUSES, subtasks, ticketArchivedAt, ticketDue, ticketOrder, ticketStatus, type Status } from "@/lib/board";
+import { removeFrontmatterKey, setFrontmatterKey } from "@/lib/frontmatter";
 import { useUi } from "@/store/ui";
 import { useWorkspace } from "@/store/workspace";
 import { FilterBar } from "./FilterBar";
-import { Column } from "./Column";
+import { ArchiveColumn, Column } from "./Column";
 import { TicketModal } from "./TicketModal";
 import { CardFace, type Card } from "./TicketCard";
 
@@ -62,6 +62,8 @@ export function Board() {
             title: f.title,
             status: ticketStatus(f.frontmatter),
             order: ticketOrder(f.frontmatter),
+            due: ticketDue(f.frontmatter),
+            archivedAt: ticketArchivedAt(f.frontmatter),
             priority: typeof p === "string" ? p : undefined,
             assignee: a == null ? undefined : String(a),
             archived: isArchived(f.path, ticketsDir),
@@ -74,10 +76,11 @@ export function Board() {
   const cols = useMemo(
     () =>
       Object.fromEntries(
-        STATUSES.map((s) => [s.id, sortCards(cards.filter((c) => c.status === s.id && (showArchived || !c.archived) && matchesFilter(c, filter)))]),
+        STATUSES.map((s) => [s.id, sortCards(cards.filter((c) => c.status === s.id && !c.archived && matchesFilter(c, filter)))]),
       ) as Record<Status, Card[]>,
-    [cards, filter, showArchived],
+    [cards, filter],
   );
+  const archived = useMemo(() => groupArchived(cards.filter((c) => c.archived && matchesFilter(c, filter))), [cards, filter]);
 
   const onDragEnd = async ({ active, over }: DragEndEvent) => {
     setActive(null);
@@ -138,7 +141,10 @@ export function Board() {
     const failed: string[] = [];
     for (const p of paths) {
       try {
-        await useWorkspace.getState().moveFile(p, target(p));
+        const np = await useWorkspace.getState().moveFile(p, target(p));
+        const { files, writeFile } = useWorkspace.getState();
+        const c = files[np].content;
+        await writeFile(np, isArchived(np, ticketsDir) ? setFrontmatterKey(c, "archived_at", localDate(new Date())) : removeFrontmatterKey(c, "archived_at"));
       } catch (e) {
         failed.push(String(e));
       }
@@ -193,6 +199,7 @@ export function Board() {
               onArchiveAll={s.id === "done" ? () => void archiveAll() : undefined}
             />
           ))}
+          {showArchived && <ArchiveColumn groups={archived} onOpen={(p) => useUi.getState().openPath(p)} />}
         </div>
         <DragOverlay>{dragging && <CardFace card={dragging} className="shadow-lg" />}</DragOverlay>
       </DndContext>

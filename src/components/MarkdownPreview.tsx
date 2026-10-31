@@ -7,6 +7,7 @@ import remarkMath from "remark-math";
 import "katex/dist/katex.min.css";
 import "highlight.js/styles/github.css";
 import { isArchived, linkLabel } from "@/lib/board";
+import { withoutComments } from "@/lib/comments";
 import { resolveLink } from "@/lib/markdown";
 import { useWorkspace } from "@/store/workspace";
 
@@ -37,7 +38,13 @@ export const wikiToLinks = (
 /** Resolve `src` against the directory of `path` (both workspace-relative, "/" separated). */
 function joinRel(path: string, src: string) {
   const out = path.split("/").slice(0, -1);
-  for (const seg of decodeURI(src).split("/")) {
+  let s = src;
+  try {
+    s = decodeURI(src);
+  } catch {
+    // malformed % escape (e.g. `100%.png`): use the raw path
+  }
+  for (const seg of s.split("/")) {
     if (seg === "..") out.pop();
     else if (seg && seg !== ".") out.push(seg);
   }
@@ -47,11 +54,15 @@ function joinRel(path: string, src: string) {
 export function MarkdownPreview({
   path,
   onLink,
+  hideComments = false,
 }: {
   path: string;
   onLink: (target: string) => void;
+  /** Tickets show their `## Comments` section separately. */
+  hideComments?: boolean;
 }) {
-  const body = useWorkspace((s) => s.files[path]?.body ?? "");
+  const raw = useWorkspace((s) => s.files[path]?.body ?? "");
+  const body = hideComments ? withoutComments(raw) : raw;
   return (
     <div className="prose-preview h-full overflow-auto p-6">
       <MarkdownBody body={body} path={path} onLink={onLink} />

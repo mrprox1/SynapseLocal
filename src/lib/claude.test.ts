@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseEvent, relPath } from "./claude";
+import { changedPaths, parseEvent, relPath } from "./claude";
 
 const p = (o: unknown) => parseEvent(JSON.stringify(o));
 
@@ -32,8 +32,17 @@ describe("relPath", () => {
   it("strips the root and normalizes backslashes", () => {
     expect(relPath("C:/w/proj", "C:\\w\\proj\\docs\\a.md")).toBe("docs/a.md");
     expect(relPath("/w/proj", "/w/proj/a.md")).toBe("a.md");
+    expect(relPath("C:/w/proj", "c:\\w\\proj\\a.md")).toBe("a.md");
   });
   it("returns null outside the root", () => {
     expect(relPath("/w/proj", "/w/other/a.md")).toBeNull();
+  });
+});
+
+describe("changedPaths", () => {
+  const t = (name: string, arg: string, isError?: boolean) => ({ role: "tool", name, arg, result: "ok", isError });
+  it("keeps successful edits of this run, deduped", () => {
+    const msgs = [t("Edit", "C:/w/old.md"), { role: "user" }, t("Edit", "C:\\w\\a.md"), t("Write", "C:/w/b.md"), t("Edit", "C:/w/a.md"), t("Edit", "C:/w/bad.md", true), t("Read", "C:/w/r.md"), t("Edit", "D:/x.md"), { role: "tool", name: "Edit", arg: "C:/w/pending.md" }];
+    expect(changedPaths("C:/w", msgs)).toEqual(["a.md", "b.md", "D:/x.md"]);
   });
 });

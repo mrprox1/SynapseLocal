@@ -49,13 +49,16 @@ export function SettingsView() {
   const mode = useThemeMode();
   const [docs, setDocs] = useState(config.docsDir);
   const [tickets, setTickets] = useState(config.ticketsDir);
+  const [soon, setSoon] = useState(String(config.dueSoonDays));
   const [err, setErr] = useState<string | null>(null);
 
   const save = async () => {
     const e = validateDir(docs, tickets) ?? validateDir(tickets, docs);
     setErr(e);
+    const n = Number(soon);
+    if (!e && !(Number.isInteger(n) && n >= 0)) return setErr("Due soon must be a whole number of days");
     if (e) return;
-    await saveConfig({ docsDir: cleanDir(docs), ticketsDir: cleanDir(tickets) }).catch((x) => setErr(String(x)));
+    await saveConfig({ docsDir: cleanDir(docs), ticketsDir: cleanDir(tickets), dueSoonDays: n }).catch((x) => setErr(String(x)));
   };
 
   return (
@@ -65,6 +68,16 @@ export function SettingsView() {
           <h2 className="font-medium">Workspace</h2>
           <FolderField label="Docs folder" value={docs} onChange={setDocs} onError={setErr} />
           <FolderField label="Tickets folder" value={tickets} onChange={setTickets} onError={setErr} />
+          <label className="flex flex-col gap-1 text-sm">
+            Highlight tickets due within (days)
+            <input
+              type="number"
+              min={0}
+              className="w-24 rounded-md border bg-transparent px-2 py-1"
+              value={soon}
+              onChange={(e) => (setErr(null), setSoon(e.target.value))}
+            />
+          </label>
           {err && <p className="text-sm text-destructive">{err}</p>}
           <div>
             <Button onClick={save}>Save</Button>

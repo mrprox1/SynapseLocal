@@ -150,7 +150,7 @@ export default function App() {
       </aside>}
       <main className="flex min-w-0 flex-1 flex-col">
         {view === "settings" ? (
-          <SettingsView />
+          <SettingsView key={root} /* fields reload when the workspace switches */ />
         ) : !root ? (
           <div className="flex flex-1 items-center justify-center">
             <Button onClick={open}>Open folder</Button>

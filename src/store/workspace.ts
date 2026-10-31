@@ -19,6 +19,8 @@ type State = {
   git: GitStatus | null;
   /** `git add -A` + commit just `paths` (workspace-relative); rejects with git's message. */
   commitAll: (message: string, paths: string[]) => Promise<void>;
+  /** Drop uncommitted changes to `path` (back to HEAD, or trash if never committed). */
+  discard: (path: string) => Promise<void>;
   openFolder: () => Promise<void>;
   restoreLast: () => Promise<void>;
   writeFile: (path: string, content: string) => Promise<void>;
@@ -42,6 +44,8 @@ type State = {
 };
 
 let unwatch: UnwatchFn | null = null;
+let active = ""; // root being opened/shown; the old watcher's pending rescan must not bring its root back
+let gen = 0; // latest index() run; older runs finishing late are dropped
 const norm = (p: string) => p.split("\\").join("/");
 const SKIP =(name: string) => name.startsWith(".") || name === "node_modules";
 const settings = () => load("settings.json");
@@ -67,6 +71,7 @@ export const useWorkspace = create<State>((set, get) => {
 
   async function index(root: string) {
     root = norm(root);
+    const g = ++gen;
     const cfgPath = `${root}/.synapse.json`;
     const config = parseConfig((await exists(cfgPath)) ? await readTextFile(cfgPath) : null);
     const paths: string[] = [];
@@ -82,7 +87,16 @@ export const useWorkspace = create<State>((set, get) => {
         files[p] = old && sameConfig && old.content === content ? old : entry(p, content, config);
       }),
     );
-    set({ root, config, files });
+    if (g !== gen) return;
+    set((s) => {
+      if (s.root !== root) return { root, config, files };
+      // files the app wrote/moved/trashed while we were reading: the store is newer than disk was
+      for (const p of new Set([...Object.keys(s.files), ...Object.keys(prev)]))
+        if (s.files[p] === prev[p]) continue;
+        else if (s.files[p]) files[p] = s.files[p];
+        else delete files[p];
+      return { root, config, files };
+    });
     await refreshGit(root);
   }
 
@@ -107,7 +121,7 @@ export const useWorkspace = create<State>((set, get) => {
         const rel = e.paths.map((p) => norm(p).slice(root.length + 1));
         if (rel.every((p) => p.split("/").some((s) => s === ".git" || s === "node_modules"))) return;
         clearTimeout(timer);
-        timer = setTimeout(() => index(root).catch(console.warn), 100);
+        timer = setTimeout(() => active === root && index(root).catch(console.warn), 100);
       },
       { recursive: true, delayMs: 300 },
     );
@@ -123,10 +137,16 @@ export const useWorkspace = create<State>((set, get) => {
       await invoke("git_commit", { root, message, paths });
       await refreshGit(root); // the watcher ignores .git
     },
+    async discard(path) {
+      const root = get().root!;
+      await invoke("git_discard", { root, path });
+      await refreshGit(root);
+    },
     async openFolder() {
       const dir = await open({ directory: true });
       if (typeof dir !== "string") return;
       await allowWorkspace(dir);
+      active = norm(dir);
       await index(dir);
       await startWatch(norm(dir));
       const s = await settings();
@@ -137,6 +157,7 @@ export const useWorkspace = create<State>((set, get) => {
       const last = await (await settings()).get<string>("lastRoot");
       // rejects when the folder is gone
       if (last && (await allowWorkspace(last).then(() => true, () => false))) {
+        active = norm(last);
         await index(last);
         await startWatch(norm(last));
       }
@@ -215,9 +236,9 @@ export const useWorkspace = create<State>((set, get) => {
         return { files: rest };
       });
     },
-    async saveConfig({ docsDir, ticketsDir }) {
+    async saveConfig({ docsDir, ticketsDir, dueSoonDays }) {
       const root = get().root!;
-      await writeTextFile(`${root}/.synapse.json`, JSON.stringify({ docsDir, ticketsDir }, null, 2) + "\n");
+      await writeTextFile(`${root}/.synapse.json`, JSON.stringify({ docsDir, ticketsDir, dueSoonDays }, null, 2) + "\n");
       await index(root); // don't wait for the watcher
     },
     async writeFile(path, content) {

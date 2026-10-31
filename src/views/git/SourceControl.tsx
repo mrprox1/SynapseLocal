@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { ChevronDown, ChevronRight, Check } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ask } from "@tauri-apps/plugin-dialog";
+import { ChevronDown, ChevronRight, Check, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useUi } from "@/store/ui";
@@ -14,6 +15,10 @@ export function SourceControl() {
   const [error, setError] = useState<string | null>(null);
   const [skip, setSkip] = useState<Set<string>>(new Set()); // unchecked paths; everything starts checked
   const [busy, setBusy] = useState(false);
+  // forget unchecks for files that are no longer changed, so they start checked if they change again
+  useEffect(() => {
+    if (git) setSkip((s) => new Set([...s].filter((p) => p in git.files)));
+  }, [git]);
   if (!git) return null;
 
   const changes = Object.entries(git.files).sort(([a], [b]) => a.localeCompare(b));
@@ -33,6 +38,19 @@ export function SourceControl() {
     try {
       await useWorkspace.getState().commitAll(message.trim(), picked);
       setMsg(null);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const discard = async (path: string) => {
+    if (!(await ask(`Discard changes to ${path}? This can't be undone.`, { kind: "warning" }))) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await useWorkspace.getState().discard(path);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -76,7 +94,7 @@ export function SourceControl() {
             const color = { color: gitColor(code) };
             const clickable = /\.md$/i.test(path); // only markdown gets a diff
             return (
-              <li key={path}>
+              <li key={path} className="group">
                 <div className="flex items-center gap-1 pl-1">
                 <input type="checkbox" checked={!skip.has(path)} onChange={() => toggle(path)} aria-label={`Include ${path}`} />
                 <button
@@ -90,6 +108,15 @@ export function SourceControl() {
                   </span>
                   <span className="truncate text-xs text-muted-foreground">{i > 0 && path.slice(0, i)}</span>
                   <span className="ml-auto text-xs" style={color}>{code}</span>
+                </button>
+                <button
+                  title="Discard changes"
+                  aria-label={`Discard changes to ${path}`}
+                  disabled={busy}
+                  className="hidden rounded p-1 text-muted-foreground hover:bg-accent group-hover:block focus-visible:block"
+                  onClick={() => void discard(path)}
+                >
+                  <Undo2 className="size-3.5" />
                 </button>
                 </div>
               </li>

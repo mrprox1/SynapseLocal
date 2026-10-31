@@ -46,5 +46,19 @@ export function parseEvent(line: string): ChatEvent[] {
 export function relPath(root: string, abs: string): string | null {
   const p = abs.split("\\").join("/");
   const r = root.split("\\").join("/").replace(/\/$/, "") + "/";
-  return p.startsWith(r) ? p.slice(r.length) : null;
+  // case-insensitive: Windows drive letters come back as `c:` or `C:`
+  return p.toLowerCase().startsWith(r.toLowerCase()) ? p.slice(r.length) : null;
+}
+
+type ToolMsg = { role: string; name?: string; arg?: string; result?: string; isError?: boolean };
+
+/** Paths of successful Edit/Write calls after the last user message: deduped, first-touched order,
+ * workspace-relative (a path outside `root` stays absolute). */
+export function changedPaths(root: string, messages: ToolMsg[]): string[] {
+  const from = messages.map((m) => m.role).lastIndexOf("user") + 1;
+  const out = new Set<string>();
+  for (const m of messages.slice(from))
+    if (m.role === "tool" && (m.name === "Edit" || m.name === "Write") && m.arg && m.result !== undefined && !m.isError)
+      out.add(relPath(root, m.arg) ?? m.arg);
+  return [...out];
 }

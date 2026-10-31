@@ -1,12 +1,13 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
-import { parseEvent } from "@/lib/claude";
+import { changedPaths, parseEvent } from "@/lib/claude";
 import { useWorkspace } from "@/store/workspace";
 
 export type Msg =
   | { role: "user"; text: string }
   | { role: "assistant"; text: string }
   | { role: "tool"; id: string; name: string; arg: string; input: unknown; result?: string; isError?: boolean }
+  | { role: "changes"; paths: string[] }
   | { role: "note"; text: string; raw?: boolean }; // Stopped / cost line / unknown events (raw)
 
 type Chat = {
@@ -58,6 +59,8 @@ export const useChat = create<Chat>((set, get) => ({
         else if (e.type === "exit") {
           if (stopped) add({ role: "note", text: "Stopped" });
           else if (e.code !== 0) set({ error: e.stderr.trim() || `claude exited with code ${e.code}` });
+          const paths = changedPaths(root, get().messages);
+          if (paths.length) add({ role: "changes", paths });
           set({ running: false });
         } else if (e.type === "raw") add({ role: "note", text: e.line, raw: true });
       }

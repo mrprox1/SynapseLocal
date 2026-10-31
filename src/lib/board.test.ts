@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { archivePath, isArchived, matchesFilter, restorePath, placeCard, slugify, sortCards, subtasks, ticketStatus, uniquePath } from "./board";
+import { archivePath, isArchived, matchesFilter, restorePath, placeCard, slugify, sortCards, subtasks, dueLabel, dueNear, groupArchived, dueState, ticketDue, ticketStatus, uniquePath } from "./board";
 
 describe("board", () => {
   it("status is strict, default backlog", () => {
@@ -56,5 +56,21 @@ describe("archive", () => {
   it("moves keep the filename", () => {
     expect(archivePath("tickets/x.md", "tickets")).toBe("tickets/archive/x.md");
     expect(restorePath("tickets/archive/x.md", "tickets")).toBe("tickets/x.md");
+  });
+
+  it("due dates", () => {
+    expect(ticketDue({ due_date: "2026-06-01" })).toBe("2026-06-01");
+    expect(ticketDue({ due_date: new Date("2026-06-01") })).toBe("2026-06-01");
+    expect(ticketDue({ due_date: "soon" })).toBeUndefined();
+    expect(dueState("2026-05-31", "todo", "2026-06-01")).toBe("overdue");
+    expect(dueState("2026-06-01", "todo", "2026-06-01")).toBe("today");
+    expect(dueState("2026-05-31", "done", "2026-06-01")).toBeUndefined();
+    const g = groupArchived([{ path: "a" }, { path: "b", archivedAt: "2026-06-01" }, { path: "c", archivedAt: "2026-06-02" }, { path: "d", archivedAt: "2026-06-01" }]);
+    expect(g.map(([k, v]) => [k, v.map((c) => c.path)])).toEqual([["2026-06-02", ["c"]], ["2026-06-01", ["b", "d"]], ["", ["a"]]]);
+    expect(dueNear("2026-06-03", "todo", "2026-06-01", 2)).toBe(true);
+    expect(dueNear("2026-06-04", "todo", "2026-06-01", 2)).toBe(false);
+    expect(dueNear("2026-05-01", "done", "2026-06-01", 2)).toBe(false);
+    expect(dueLabel("2026-06-01", "2026-01-01")).toBe("Jun 1");
+    expect(dueLabel("2025-06-01", "2026-01-01")).toBe("Jun 1, 2025");
   });
 });

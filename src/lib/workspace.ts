@@ -1,7 +1,7 @@
-export type Config = { docsDir: string; ticketsDir: string };
+export type Config = { docsDir: string; ticketsDir: string; dueSoonDays: number };
 export type Category = "doc" | "ticket" | "other";
 
-export const DEFAULT_CONFIG: Config = { docsDir: "docs", ticketsDir: "tickets" };
+export const DEFAULT_CONFIG: Config = { docsDir: "docs", ticketsDir: "tickets", dueSoonDays: 2 };
 
 /** Invalid JSON or non-string keys fall back to defaults. */
 export function parseConfig(text: string | null): Config {
@@ -13,6 +13,7 @@ export function parseConfig(text: string | null): Config {
     return {
       docsDir: dir(j?.docsDir, DEFAULT_CONFIG.docsDir),
       ticketsDir: dir(j?.ticketsDir, DEFAULT_CONFIG.ticketsDir),
+      dueSoonDays: Number.isInteger(j?.dueSoonDays) && j.dueSoonDays >= 0 ? j.dueSoonDays : DEFAULT_CONFIG.dueSoonDays,
     };
   } catch {
     console.warn(".synapse.json is not valid JSON; using defaults");
