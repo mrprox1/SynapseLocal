@@ -10,6 +10,7 @@ export type ParsedMarkdown = {
 const FM = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
 const FENCE = /^(```|~~~)[\s\S]*?(?:^\1.*$|(?![\s\S]))/gm;
 const LINK = /\[\[([^\][|]+)(?:\|[^\]]*)?\]\]/g;
+const LINK_ALIAS = /\[\[([^\][|]+)(\|[^\]]*)?\]\]/g;
 
 export function parseMarkdown(path: string, content: string): ParsedMarkdown {
   let frontmatter: Record<string, unknown> = {};
@@ -50,4 +51,22 @@ export function resolveLink<T extends { path: string; title: string }>(
     sorted.find((f) => f.title.toLowerCase() === t) ??
     null
   );
+}
+
+/** Rewrite `[[t]]` / `[[t|alias]]` to point at `to` where `match(t)`; fences untouched. Returns the count. */
+export function rewriteLinks(content: string, match: (target: string) => boolean, to: string) {
+  let n = 0;
+  const fix = (s: string) =>
+    s.replace(LINK_ALIAS, (m, t: string, alias?: string) => {
+      if (!match(t.trim())) return m;
+      n++;
+      return `[[${to}${alias ?? ""}]]`;
+    });
+  let out = "";
+  let last = 0;
+  for (const f of content.matchAll(FENCE)) {
+    out += fix(content.slice(last, f.index)) + f[0];
+    last = f.index + f[0].length;
+  }
+  return { content: out + fix(content.slice(last)), n };
 }

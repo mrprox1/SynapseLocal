@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseMarkdown, resolveLink } from "./markdown";
+import { parseMarkdown, resolveLink, rewriteLinks } from "./markdown";
 
 describe("parseMarkdown", () => {
   it("title: frontmatter > heading > filename", () => {
@@ -39,5 +39,14 @@ describe("resolveLink", () => {
   it("falls back to title, then null", () => {
     expect(resolveLink("baz", files)?.path).toBe("c/z.md");
     expect(resolveLink("nope", files)).toBeNull();
+  });
+});
+
+describe("rewriteLinks", () => {
+  it("renames matching links, keeps aliases, skips fences and other links", () => {
+    const src = "[[Old]] [[old|al]] [[Other]]\n```\n[[Old]]\n```\n[[ OLD ]]";
+    const r = rewriteLinks(src, (t) => t.toLowerCase() === "old", "New");
+    expect(r.n).toBe(3);
+    expect(r.content).toBe("[[New]] [[New|al]] [[Other]]\n```\n[[Old]]\n```\n[[New]]");
   });
 });

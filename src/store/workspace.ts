@@ -1,8 +1,8 @@
 import { create } from "zustand";
 import { open } from "@tauri-apps/plugin-dialog";
-import { exists, mkdir, readDir, readTextFile, watch, writeTextFile, type UnwatchFn } from "@tauri-apps/plugin-fs";
+import { exists, mkdir, readDir, rename, readTextFile, watch, writeTextFile, type UnwatchFn } from "@tauri-apps/plugin-fs";
 import { load } from "@tauri-apps/plugin-store";
-import { parseMarkdown, type ParsedMarkdown } from "@/lib/markdown";
+import { parseMarkdown, resolveLink, rewriteLinks, type ParsedMarkdown } from "@/lib/markdown";
 import { categorize, DEFAULT_CONFIG, parseConfig, sanitizeName, type Category, type Config } from "@/lib/workspace";
 
 export type FileEntry = ParsedMarkdown & { path: string; category: Category; content: string };
@@ -16,6 +16,11 @@ type State = {
   writeFile: (path: string, content: string) => Promise<void>;
   /** Create `<docsDir>/<name>.md` (`# name`) unless it exists; returns its path. */
   createDoc: (name: string) => Promise<string>;
+  /**
+   * Rename a doc in place. If other files link to it, `confirm(links, files)` decides
+   * whether their `[[links]]` are rewritten. Returns the new path.
+   */
+  renameDoc: (path: string, name: string, confirm: (links: number, files: number) => Promise<boolean>) => Promise<string>;
 };
 
 let unwatch: UnwatchFn | null = null;
@@ -107,6 +112,33 @@ export const useWorkspace = create<State>((set, get) => {
         await get().writeFile(path, `# ${clean}\n`);
       }
       return path;
+    },
+    async renameDoc(path, name, confirm) {
+      const { root, files, config } = get();
+      const clean = sanitizeName(name);
+      if (!clean) throw new Error("empty name");
+      const newPath = `${path.split("/").slice(0, -1).concat(`${clean}.md`).join("/")}`;
+      if (newPath === path) return path;
+      if (Object.keys(files).some((p) => p.toLowerCase() === newPath.toLowerCase() && p !== path))
+        throw new Error(`${newPath} already exists`);
+
+      const targets = Object.values(files).filter((f) => f.category !== "ticket");
+      const updates = Object.values(files).flatMap((f) => {
+        if (f.path === path) return [];
+        const r = rewriteLinks(f.content, (t) => resolveLink(t, targets)?.path === path, clean);
+        return r.n ? [{ f, ...r }] : [];
+      });
+      const doUpdate =
+        updates.length > 0 && (await confirm(updates.reduce((a, u) => a + u.n, 0), updates.length));
+
+      const old = files[path];
+      await rename(`${root}/${path}`, `${root}/${newPath}`);
+      set((s) => {
+        const { [path]: _, ...rest } = s.files;
+        return { files: { ...rest, [newPath]: entry(newPath, old.content, config) } };
+      });
+      if (doUpdate) for (const u of updates) await get().writeFile(u.f.path, u.content);
+      return newPath;
     },
     async writeFile(path, content) {
       const { root, config } = get();
