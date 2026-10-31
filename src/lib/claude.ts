@@ -41,3 +41,10 @@ export function parseEvent(line: string): ChatEvent[] {
   }
   return raw;
 }
+
+/** Absolute (maybe backslashed) path → workspace-relative, or null when it is outside `root`. */
+export function relPath(root: string, abs: string): string | null {
+  const p = abs.split("\\").join("/");
+  const r = root.split("\\").join("/").replace(/\/$/, "") + "/";
+  return p.startsWith(r) ? p.slice(r.length) : null;
+}

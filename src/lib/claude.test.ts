@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseEvent } from "./claude";
+import { parseEvent, relPath } from "./claude";
 
 const p = (o: unknown) => parseEvent(JSON.stringify(o));
 
@@ -25,5 +25,15 @@ describe("parseEvent", () => {
   it("keeps garbage and unknown types as raw", () => {
     expect(parseEvent("nope")).toEqual([{ type: "raw", line: "nope" }]);
     expect(parseEvent('{"type":"weird"}')).toEqual([{ type: "raw", line: '{"type":"weird"}' }]);
+  });
+});
+
+describe("relPath", () => {
+  it("strips the root and normalizes backslashes", () => {
+    expect(relPath("C:/w/proj", "C:\\w\\proj\\docs\\a.md")).toBe("docs/a.md");
+    expect(relPath("/w/proj", "/w/proj/a.md")).toBe("a.md");
+  });
+  it("returns null outside the root", () => {
+    expect(relPath("/w/proj", "/w/other/a.md")).toBeNull();
   });
 });

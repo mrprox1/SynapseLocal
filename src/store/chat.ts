@@ -6,15 +6,15 @@ import { useWorkspace } from "@/store/workspace";
 export type Msg =
   | { role: "user"; text: string }
   | { role: "assistant"; text: string }
-  | { role: "tool"; id: string; line: string; done?: boolean; isError?: boolean }
-  | { role: "note"; text: string }; // Stopped / raw events
+  | { role: "tool"; id: string; name: string; arg: string; input: unknown; result?: string; isError?: boolean }
+  | { role: "note"; text: string; raw?: boolean }; // Stopped / cost line / unknown events (raw)
 
 type Chat = {
   messages: Msg[];
   sessionId: string | null;
   running: boolean;
   error: string | null;
-  send: (text: string) => Promise<void>;
+  send: (text: string, prefix?: string) => Promise<void>;
   stop: () => void;
   reset: () => void;
 };
@@ -28,7 +28,7 @@ export const useChat = create<Chat>((set, get) => ({
   sessionId: null,
   running: false,
   error: null,
-  send: async (text) => {
+  send: async (text, prefix = "") => {
     const { root } = useWorkspace.getState();
     if (!root || get().running) return;
     stopped = false;
@@ -37,8 +37,13 @@ export const useChat = create<Chat>((set, get) => ({
     const ch = new Channel<string>();
     ch.onmessage = (line) => {
       for (const e of parseEvent(line)) {
-        if (e.type === "init" || (e.type === "result" && e.sessionId)) set({ sessionId: e.sessionId });
-        else if (e.type === "text") {
+        if (e.type === "init") set({ sessionId: e.sessionId });
+        else if (e.type === "result") {
+          if (e.sessionId) set({ sessionId: e.sessionId });
+          const cost = e.cost === null ? "" : `$${e.cost.toFixed(4)}`;
+          const turns = e.turns === null ? "" : `${e.turns} turns`;
+          add({ role: "note", text: [cost, turns].filter(Boolean).join(" · ") });
+        } else if (e.type === "text") {
           set((s) => {
             const last = s.messages[s.messages.length - 1];
             return last?.role === "assistant"
@@ -47,19 +52,18 @@ export const useChat = create<Chat>((set, get) => ({
           });
         } else if (e.type === "tool_use") {
           const inp = e.input as Record<string, unknown> | null;
-          const arg = inp?.file_path ?? inp?.path ?? inp?.pattern ?? "";
-          add({ role: "tool", id: e.id, line: `${e.name} ${arg}`.trim() });
+          add({ role: "tool", id: e.id, name: e.name, arg: String(inp?.file_path ?? inp?.path ?? inp?.pattern ?? ""), input: e.input });
         } else if (e.type === "tool_result")
-          set((s) => ({ messages: s.messages.map((m) => (m.role === "tool" && m.id === e.id ? { ...m, done: true, isError: e.isError } : m)) }));
+          set((s) => ({ messages: s.messages.map((m) => (m.role === "tool" && m.id === e.id ? { ...m, result: e.content, isError: e.isError } : m)) }));
         else if (e.type === "exit") {
           if (stopped) add({ role: "note", text: "Stopped" });
           else if (e.code !== 0) set({ error: e.stderr.trim() || `claude exited with code ${e.code}` });
           set({ running: false });
-        } else if (e.type === "raw") add({ role: "note", text: e.line });
+        } else if (e.type === "raw") add({ role: "note", text: e.line, raw: true });
       }
     };
     try {
-      await invoke("claude_run", { root, message: text, sessionId: get().sessionId, onEvent: ch });
+      await invoke("claude_run", { root, message: prefix + text, sessionId: get().sessionId, onEvent: ch });
     } catch (e) {
       set({ running: false, error: e === "claude-not-found" ? NOT_FOUND : String(e) });
     }
