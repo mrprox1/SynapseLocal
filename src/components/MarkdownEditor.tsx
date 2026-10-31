@@ -3,8 +3,9 @@ import CodeMirror from "@uiw/react-codemirror";
 import { markdown } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { EditorView } from "@codemirror/view";
-import { Prec, type Extension } from "@codemirror/state";
+import { EditorSelection, Prec, type Extension } from "@codemirror/state";
 import { parseMarkdown } from "@/lib/markdown";
+import { useUi } from "@/store/ui";
 import { useWorkspace } from "@/store/workspace";
 import { useIsDark } from "@/theme";
 
@@ -31,6 +32,8 @@ export function MarkdownEditor({
   const writeFile = useWorkspace((s) => s.writeFile);
   const dark = useIsDark();
   const [value, setValue] = useState(stored ?? "");
+  const [view, setView] = useState<EditorView>();
+  const jump = useUi((s) => s.jump);
   const dirty = useRef(false); // unsaved local edits
   // Set in the path effect, not during render: the old file's cleanup flush must still see the old path.
   const latest = useRef({ path, value });
@@ -60,9 +63,23 @@ export function MarkdownEditor({
     if (!dirty.current && stored !== undefined) setValue(stored);
   }, [stored]);
 
+  // Apply a search jump once the editor holds this file; offsets are into the full content, so skip bodyOnly.
+  useEffect(() => {
+    if (bodyOnly || !view || jump?.path !== path || view.state.doc.toString() !== stored) return;
+    const len = view.state.doc.length;
+    const from = Math.min(jump.from, len);
+    view.dispatch({
+      selection: EditorSelection.range(from, Math.min(jump.to, len)),
+      effects: EditorView.scrollIntoView(from, { y: "center" }),
+    });
+    view.focus();
+    useUi.setState({ jump: null });
+  }, [jump, path, value, view, stored, bodyOnly]);
+
   return (
     <CodeMirror
       value={value}
+      onCreateEditor={setView}
       theme={dark ? "dark" : "light"}
       extensions={[...base, ...extensions]}
       onChange={(v) => {

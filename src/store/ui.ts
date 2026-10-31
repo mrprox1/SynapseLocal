@@ -12,6 +12,7 @@ type Ui = {
   sidebar: boolean; // sidebar expanded (Docs / Files)
   boardFilter: Filter; // session-only
   showArchived: boolean; // session-only
+  jump: { path: string; from: number; to: number } | null; // select this range once the file is open; session-only
   searchOpen: boolean; // full-text search modal
   recent: string[]; // opened paths, most recent first; session-only
   setBoardFilter: (f: Filter) => void;
@@ -28,6 +29,7 @@ export const useUi = create<Ui>((set) => ({
   sidebar: true,
   boardFilter: NO_FILTER,
   showArchived: false,
+  jump: null,
   searchOpen: false,
   recent: [],
   setBoardFilter: (boardFilter) => set({ boardFilter }),

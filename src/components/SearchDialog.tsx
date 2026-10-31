@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { linkLabel } from "@/lib/board";
-import { search, type Scope } from "@/lib/search";
+import { search, type Result, type Scope } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import { useUi } from "@/store/ui";
 import { useWorkspace } from "@/store/workspace";
@@ -46,16 +46,17 @@ export function SearchDialog() {
   }, [sel]);
 
   const close = () => useUi.setState({ searchOpen: false });
-  const pick = (path: string | undefined) => {
-    if (!path) return;
+  const pick = (r: Result | undefined, line = r?.lines[0]) => {
+    if (!r) return;
     close();
-    useUi.getState().openPath(path);
+    useUi.setState({ jump: line ? { path: r.path, from: line.from, to: line.to } : null });
+    useUi.getState().openPath(r.path);
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") setSel((s) => Math.min(s + 1, results.length - 1));
     else if (e.key === "ArrowUp") setSel((s) => Math.max(s - 1, 0));
-    else if (e.key === "Enter") pick(results[sel]?.path);
+    else if (e.key === "Enter") pick(results[sel]);
     else return;
     e.preventDefault();
   };
@@ -91,7 +92,7 @@ export function SearchDialog() {
         {results.map((r, i) => (
           <div
             key={r.path}
-            onClick={() => pick(r.path)}
+            onClick={() => pick(r)}
             onMouseMove={() => setSel(i)}
             className={cn("cursor-pointer rounded px-2 py-1.5 text-sm", i === sel && "bg-accent")}
           >
@@ -100,7 +101,13 @@ export function SearchDialog() {
               <span className="ml-auto truncate text-xs text-muted-foreground">{r.path}</span>
             </div>
             {r.lines.map((l) => (
-              <div key={l.line} className="truncate text-xs text-muted-foreground">
+              <div
+                key={l.line}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  pick(r, l);
+                }}
+                className="truncate text-xs text-muted-foreground">
                 {l.text.slice(0, l.col)}
                 <mark>{l.text.slice(l.col, l.col + l.to - l.from)}</mark>
                 {l.text.slice(l.col + l.to - l.from)}
