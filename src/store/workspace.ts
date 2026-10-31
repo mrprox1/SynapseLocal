@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { open } from "@tauri-apps/plugin-dialog";
-import { exists, readDir, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { exists, readDir, readTextFile, watch, writeTextFile, type UnwatchFn } from "@tauri-apps/plugin-fs";
 import { load } from "@tauri-apps/plugin-store";
 import { parseMarkdown, type ParsedMarkdown } from "@/lib/markdown";
 import { categorize, DEFAULT_CONFIG, parseConfig, type Category, type Config } from "@/lib/workspace";
@@ -16,7 +16,9 @@ type State = {
   writeFile: (path: string, content: string) => Promise<void>;
 };
 
-const SKIP = (name: string) => name.startsWith(".") || name === "node_modules";
+let unwatch: UnwatchFn | null = null;
+const norm = (p: string) => p.split("\\").join("/");
+const SKIP =(name: string) => name.startsWith(".") || name === "node_modules";
 const settings = () => load("settings.json");
 
 async function walk(root: string, rel: string, out: string[]) {
@@ -37,18 +39,40 @@ export const useWorkspace = create<State>((set, get) => {
   });
 
   async function index(root: string) {
-    root = root.replace(/\\/g, "/");
+    root = norm(root);
     const cfgPath = `${root}/.synapse.json`;
     const config = parseConfig((await exists(cfgPath)) ? await readTextFile(cfgPath) : null);
     const paths: string[] = [];
     await walk(root, "", paths);
+    const prev = get().root === root ? get().files : {};
+    const sameConfig = get().config === config || JSON.stringify(get().config) === JSON.stringify(config);
     const files: Record<string, FileEntry> = {};
     await Promise.all(
       paths.map(async (p) => {
-        files[p] = entry(p, await readTextFile(`${root}/${p}`), config);
+        const content = await readTextFile(`${root}/${p}`);
+        // keep the old entry when nothing changed so subscribers don't re-render
+        const old = prev[p];
+        files[p] = old && sameConfig && old.content === content ? old : entry(p, content, config);
       }),
     );
     set({ root, config, files });
+  }
+
+  async function startWatch(root: string) {
+    await unwatch?.();
+    unwatch = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    unwatch = await watch(
+      root,
+      (e) => {
+        // ignore noise from .git / node_modules; everything else triggers a rescan
+        const rel = e.paths.map((p) => norm(p).slice(root.length + 1));
+        if (rel.every((p) => p.split("/").some((s) => s === ".git" || s === "node_modules"))) return;
+        clearTimeout(timer);
+        timer = setTimeout(() => index(root).catch(console.warn), 100);
+      },
+      { recursive: true, delayMs: 300 },
+    );
   }
 
   return {
@@ -59,13 +83,17 @@ export const useWorkspace = create<State>((set, get) => {
       const dir = await open({ directory: true });
       if (typeof dir !== "string") return;
       await index(dir);
+      await startWatch(norm(dir));
       const s = await settings();
       await s.set("lastRoot", dir);
       await s.save();
     },
     async restoreLast() {
       const last = await (await settings()).get<string>("lastRoot");
-      if (last && (await exists(last))) await index(last);
+      if (last && (await exists(last))) {
+        await index(last);
+        await startWatch(norm(last));
+      }
     },
     async writeFile(path, content) {
       const { root, config } = get();
