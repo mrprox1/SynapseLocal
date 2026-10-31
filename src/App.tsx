@@ -24,13 +24,13 @@ import { ExplorerMain } from "@/views/explorer/ExplorerMain";
 import { FileTree } from "@/views/explorer/FileTree";
 import { SourceControl } from "@/views/git/SourceControl";
 import { SettingsView } from "@/views/settings/SettingsView";
-import { setThemeMode, useThemeMode, type ThemeMode } from "@/theme";
+import { NEXT_THEME, setThemeMode, useThemeMode, type ThemeMode } from "@/theme";
 
-// click cycles through these
-const THEMES: Record<ThemeMode, { next: ThemeMode; label: string; Icon: LucideIcon }> = {
-  system: { next: "dark", label: "Theme: System", Icon: Monitor },
-  dark: { next: "light", label: "Theme: Dark", Icon: Moon },
-  light: { next: "system", label: "Theme: Light", Icon: Sun },
+// label + icon per mode; NEXT_THEME gives the click order
+const THEMES: Record<ThemeMode, { label: string; Icon: LucideIcon }> = {
+  system: { label: "Theme: System", Icon: Monitor },
+  dark: { label: "Theme: Dark", Icon: Moon },
+  light: { label: "Theme: Light", Icon: Sun },
 };
 
 const VIEWS: { id: View; label: string; Icon: LucideIcon }[] = [
@@ -47,7 +47,8 @@ export default function App() {
   const hasSidebar = view !== "board" && view !== "settings"; // these have nothing to list
   const changes = useWorkspace((s) => (s.git ? Object.keys(s.git.files).length : null)); // null = not a repo
   const open = () => openFolder().catch(console.error);
-  const T = THEMES[useThemeMode()];
+  const mode = useThemeMode();
+  const T = THEMES[mode];
   useEffect(() => {
     if (changes === null && view === "git") setView("docs");
   }, [changes, view, setView]);
@@ -93,7 +94,7 @@ export default function App() {
           size="icon"
           title={T.label}
           aria-label={T.label}
-          onClick={() => setThemeMode(T.next)}
+          onClick={() => setThemeMode(NEXT_THEME[mode])}
         >
           <T.Icon />
         </Button>

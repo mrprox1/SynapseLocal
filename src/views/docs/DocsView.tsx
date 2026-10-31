@@ -108,7 +108,7 @@ export function DocsMain() {
   const current = useUi((s) => s.current);
   const exists = useWorkspace((s) => current != null && s.files[current]?.category === "doc");
   const [preview, setPreview] = useState(false);
-  const [graph, setGraph] = useState(false);
+  const graph = useUi((s) => s.graph);
   const [renaming, setRenaming] = useState<string | null>(null);
   const rename = async () => {
     const n = renaming?.trim();
@@ -136,7 +136,7 @@ export function DocsMain() {
   return (
     <>
       <div className="flex justify-end gap-1 border-b px-2 py-1">
-        <Button variant="ghost" size="sm" onClick={() => setGraph((g) => !g)}>
+        <Button variant="ghost" size="sm" onClick={() => useUi.setState({ graph: !graph })}>
           {graph ? "Doc" : "Graph"}
         </Button>
         {!graph &&

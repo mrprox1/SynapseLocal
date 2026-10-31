@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { File, FileText, KanbanSquare, type LucideIcon } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
+import { COMMANDS, type Prompt } from "@/lib/commands";
 import { fuzzyScore } from "@/lib/fuzzy";
 import { cn } from "@/lib/utils";
 import { useUi } from "@/store/ui";
@@ -15,14 +16,18 @@ export function CommandPalette() {
   const [sel, setSel] = useState(0);
   const files = useWorkspace((s) => s.files);
   const recent = useUi((s) => s.recent);
+  const [prompt, setPrompt] = useState<Prompt | null>(null);
+  const [error, setError] = useState("");
   const list = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") {
         e.preventDefault();
-        setQuery("");
+        setQuery(e.shiftKey ? ">" : "");
         setSel(0);
+        setPrompt(null);
+        setError("");
         setOpen(true);
       }
     };
@@ -30,7 +35,20 @@ export function CommandPalette() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, []);
 
+  const cmdMode = !prompt && query.startsWith(">");
+  const cmds = useMemo(() => {
+    if (!cmdMode || !open) return [];
+    const q = query.slice(1).trim();
+    return COMMANDS.filter((c) => !c.when || c.when())
+      .map((c) => ({ c, s: q ? fuzzyScore(q, c.label) : 0 }))
+      .filter((x): x is { c: (typeof COMMANDS)[number]; s: number } => x.s !== null)
+      .sort((a, b) => b.s - a.s)
+      .slice(0, MAX)
+      .map((x) => x.c);
+  }, [cmdMode, open, query]);
+
   const rows = useMemo(() => {
+    if (cmdMode || prompt) return [];
     const all = Object.values(files);
     if (!query) {
       const rank = (p: string) => recent.indexOf(p);
@@ -48,7 +66,7 @@ export function CommandPalette() {
       .sort((a, b) => b.s - a.s || a.f.title.localeCompare(b.f.title))
       .slice(0, MAX)
       .map((x) => x.f);
-  }, [files, query, recent]);
+  }, [files, query, recent, cmdMode, prompt]);
 
   useEffect(() => {
     list.current?.children[sel]?.scrollIntoView({ block: "nearest" });
@@ -60,10 +78,31 @@ export function CommandPalette() {
     useUi.getState().openPath(path);
   };
 
+  const n = cmdMode ? cmds.length : rows.length;
+  const runCmd = (c: (typeof COMMANDS)[number] | undefined) => {
+    if (!c) return;
+    const p = c.run();
+    if (p) {
+      setPrompt(p);
+      setQuery("");
+    } else setOpen(false);
+  };
+  const submit = () => {
+    const name = query.trim();
+    if (!prompt || !name) return;
+    prompt
+      .submit(name)
+      .then((path) => {
+        setOpen(false);
+        useUi.getState().openPath(path);
+      })
+      .catch((err) => setError(String(err)));
+  };
+
   const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "ArrowDown") setSel((s) => Math.min(s + 1, rows.length - 1));
+    if (e.key === "ArrowDown") setSel((s) => Math.min(s + 1, n - 1));
     else if (e.key === "ArrowUp") setSel((s) => Math.max(s - 1, 0));
-    else if (e.key === "Enter") pick(rows[sel]?.path);
+    else if (e.key === "Enter") prompt ? submit() : cmdMode ? runCmd(cmds[sel]) : pick(rows[sel]?.path);
     else return;
     e.preventDefault();
   };
@@ -75,13 +114,25 @@ export function CommandPalette() {
         value={query}
         onChange={(e) => {
           setQuery(e.target.value);
+          setError("");
           setSel(0);
         }}
         onKeyDown={onKeyDown}
-        placeholder="Go to file…"
+        placeholder={prompt?.placeholder ?? "Go to file…  (> for commands)"}
         className="w-full rounded-md border bg-transparent px-3 py-2 text-sm outline-none"
       />
+      {error && <div className="text-sm text-destructive">{error}</div>}
       <div ref={list} className="min-h-0 overflow-y-auto">
+        {cmds.map((c, i) => (
+          <div
+            key={c.label}
+            onClick={() => runCmd(c)}
+            onMouseMove={() => setSel(i)}
+            className={cn("cursor-pointer rounded px-2 py-1.5 text-sm", i === sel && "bg-accent")}
+          >
+            {c.label}
+          </div>
+        ))}
         {rows.map((f, i) => {
           const Icon = ICONS[f.category] ?? File;
           return (

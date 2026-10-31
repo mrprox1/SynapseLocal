@@ -21,6 +21,9 @@ const apply = () => {
   document.documentElement.classList.toggle("dark", m === "dark" || (m === "system" && mq.matches));
 };
 
+/** Click-cycle order. */
+export const NEXT_THEME: Record<ThemeMode, ThemeMode> = { system: "dark", dark: "light", light: "system" };
+
 export function setThemeMode(m: ThemeMode) {
   try {
     localStorage.setItem(KEY, m);

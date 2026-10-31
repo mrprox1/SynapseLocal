@@ -8,6 +8,7 @@ type Ui = {
   view: View;
   current: string | null; // path of the file open in the editor
   focus: boolean; // Explorer focus mode
+  graph: boolean; // Docs graph view; session-only
   sidebar: boolean; // sidebar expanded (Docs / Files)
   boardFilter: Filter; // session-only
   showArchived: boolean; // session-only
@@ -22,6 +23,7 @@ export const useUi = create<Ui>((set) => ({
   view: "docs",
   current: null,
   focus: false,
+  graph: false,
   sidebar: true,
   boardFilter: NO_FILTER,
   showArchived: false,
