@@ -15,7 +15,7 @@ import { wikiLinks } from "./wikiLinks";
 
 export async function openLink(target: string) {
   const { files, createDoc } = useWorkspace.getState();
-  const hit = resolveLink(target, Object.values(files).filter((f) => f.category !== "ticket"));
+  const hit = resolveLink(target, Object.values(files));
   useUi.getState().openPath(hit ? hit.path : await createDoc(target));
 }
 

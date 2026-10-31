@@ -9,7 +9,7 @@ export function Backlinks({ path }: { path: string }) {
 
   // shortcut: full scan on every change, build an inverted index if workspaces get big
   const hits = useMemo(() => {
-    const targets = Object.values(files).filter((f) => f.category !== "ticket");
+    const targets = Object.values(files);
     return Object.values(files)
       .filter((f) => f.path !== path && f.links.some((t) => resolveLink(t, targets)?.path === path))
       .map((f) => {

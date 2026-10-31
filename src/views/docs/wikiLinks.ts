@@ -6,9 +6,8 @@ import { useWorkspace } from "@/store/workspace";
 
 const LINK = /\[\[([^\][|]+)(?:\|[^\]]*)?\]\]/g;
 
-/** Docs and other files are link targets; tickets are not. */
-const targets = () =>
-  Object.values(useWorkspace.getState().files).filter((f) => f.category !== "ticket");
+/** Every file (doc, ticket, other) is a link target. */
+const targets = () => Object.values(useWorkspace.getState().files);
 
 function complete(ctx: CompletionContext) {
   const m = ctx.matchBefore(/\[\[[^\]\n]*/);

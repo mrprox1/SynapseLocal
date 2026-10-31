@@ -147,7 +147,7 @@ export const useWorkspace = create<State>((set, get) => {
       if (Object.keys(files).some((p) => p.toLowerCase() === newPath.toLowerCase() && p !== path))
         throw new Error(`${newPath} already exists`);
 
-      const targets = Object.values(files).filter((f) => f.category !== "ticket");
+      const targets = Object.values(files);
       const updates = Object.values(files).flatMap((f) => {
         if (f.path === path) return [];
         const r = rewriteLinks(f.content, (t) => resolveLink(t, targets)?.path === path, clean);
