@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { CommandPalette } from "@/components/CommandPalette";
+import { SearchDialog } from "@/components/SearchDialog";
 import { Button } from "@/components/ui/button";
 import { useUi, type View } from "@/store/ui";
 import { useWorkspace } from "@/store/workspace";
@@ -137,6 +138,7 @@ export default function App() {
         )}
       </main>
       <CommandPalette />
+      <SearchDialog />
     </div>
   );
 }

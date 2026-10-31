@@ -36,6 +36,7 @@ export const COMMANDS: Command[] = [
     }),
     when: hasRoot,
   },
+  { label: "Search in files", run: () => useUi.setState({ searchOpen: true }), when: hasRoot },
   { label: "Toggle theme", run: () => setThemeMode(NEXT_THEME[getThemeMode()]) },
   { label: "Open folder…", run: () => void useWorkspace.getState().openFolder().catch(console.error) },
   {
