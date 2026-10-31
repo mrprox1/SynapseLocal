@@ -5,8 +5,10 @@ import {
   DragOverlay,
   KeyboardSensor,
   PointerSensor,
+  pointerWithin,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
@@ -20,6 +22,14 @@ import { TicketModal } from "./TicketModal";
 import { CardFace, type Card } from "./TicketCard";
 
 type Pending = Record<string, { status: Status; order: number }>;
+
+// closestCorners alone measures corners, so a tall empty column loses to a card in the
+// neighbouring column. Use what's under the pointer (card before column); keyboard falls back.
+const collision: CollisionDetection = (args) => {
+  const hits = pointerWithin(args);
+  const cards = hits.filter((h) => !String(h.id).startsWith("col:"));
+  return cards.length ? cards : hits.length ? hits : closestCorners(args);
+};
 
 export function Board() {
   const files = useWorkspace((s) => s.files);
@@ -139,7 +149,7 @@ export function Board() {
       <FilterBar cards={cards} />
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCorners}
+        collisionDetection={collision}
         onDragStart={(e) => setActive(String(e.active.id))}
         onDragCancel={() => setActive(null)}
         onDragEnd={(e) => void onDragEnd(e)}
