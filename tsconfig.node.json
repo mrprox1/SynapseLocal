@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "composite": true,
+    "outDir": "node_modules/.tmp", // emitted vite.config.js next to the .ts would shadow it
     "skipLibCheck": true,
     "module": "ESNext",
     "moduleResolution": "bundler",

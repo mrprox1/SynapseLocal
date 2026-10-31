@@ -9,8 +9,14 @@ const host = process.env.TAURI_DEV_HOST;
 // https://vite.dev/config/
 export default defineConfig(() => ({
   plugins: [react(), tailwindcss()],
-  resolve: { alias: { "@": path.resolve(__dirname, "./src") } },
-  test: { environment: "node" },
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+      lowlight: path.resolve(__dirname, "./src/lib/lowlight.ts"), // trimmed highlight.js grammars
+    },
+  },
+  // inline so the lowlight alias applies in tests too
+  test: { environment: "node", server: { deps: { inline: ["rehype-highlight"] } } },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

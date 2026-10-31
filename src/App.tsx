@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import {
   FileText,
   GitBranch,
@@ -15,7 +15,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { CommandPalette } from "@/components/CommandPalette";
-import { ChatPanel } from "@/views/chat/ChatPanel";
 import { SearchDialog } from "@/components/SearchDialog";
 import { Button } from "@/components/ui/button";
 import { useUi, type View } from "@/store/ui";
@@ -23,12 +22,15 @@ import { useWorkspace } from "@/store/workspace";
 import { cn } from "@/lib/utils";
 import { Board } from "@/views/board/Board";
 import { DocsMain, DocsSidebar } from "@/views/docs/DocsView";
-import { ExplorerMain } from "@/views/explorer/ExplorerMain";
-import { FileTree } from "@/views/explorer/FileTree";
-import { DiffView } from "@/views/git/DiffView";
-import { SourceControl } from "@/views/git/SourceControl";
-import { SettingsView } from "@/views/settings/SettingsView";
 import { NEXT_THEME, setThemeMode, useThemeMode, type ThemeMode } from "@/theme";
+
+// Docs and Board are the core views and load eagerly; the rest load on first use
+const ChatPanel = lazy(() => import("@/views/chat/ChatPanel").then((m) => ({ default: m.ChatPanel })));
+const ExplorerMain = lazy(() => import("@/views/explorer/ExplorerMain").then((m) => ({ default: m.ExplorerMain })));
+const FileTree = lazy(() => import("@/views/explorer/FileTree").then((m) => ({ default: m.FileTree })));
+const DiffView = lazy(() => import("@/views/git/DiffView").then((m) => ({ default: m.DiffView })));
+const SourceControl = lazy(() => import("@/views/git/SourceControl").then((m) => ({ default: m.SourceControl })));
+const SettingsView = lazy(() => import("@/views/settings/SettingsView").then((m) => ({ default: m.SettingsView })));
 
 // label + icon per mode; NEXT_THEME gives the click order
 const THEMES: Record<ThemeMode, { label: string; Icon: LucideIcon }> = {
@@ -145,10 +147,13 @@ export default function App() {
           {Object.keys(files).length} files
         </div>
         {view === "docs" && <DocsSidebar />}
-        {view === "files" && <FileTree />}
-        {view === "git" && <SourceControl />}
+        <Suspense>
+          {view === "files" && <FileTree />}
+          {view === "git" && <SourceControl />}
+        </Suspense>
       </aside>}
       <main className="flex min-w-0 flex-1 flex-col">
+        <Suspense>
         {view === "settings" ? (
           <SettingsView key={root} /* fields reload when the workspace switches */ />
         ) : !root ? (
@@ -164,8 +169,9 @@ export default function App() {
         ) : (
           <ExplorerMain />
         )}
+        </Suspense>
       </main>
-      {!focus && root && chat && <ChatPanel />}
+      {!focus && root && chat && <Suspense><ChatPanel /></Suspense>}
       <CommandPalette />
       <SearchDialog />
     </div>

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { categorize, DEFAULT_CONFIG, parseConfig, relativeTo, sanitizeName, validateDir } from "./workspace";
+import { categorize, DEFAULT_CONFIG, parseConfig, relativeTo, sanitizeName, validateDir, watchAction } from "./workspace";
 
 describe("parseConfig", () => {
   it("defaults when missing, partial, or invalid", () => {
@@ -55,5 +55,18 @@ describe("relativeTo", () => {
     expect(relativeTo("C:/w", "C:/w/docs/")).toBe("docs");
     expect(relativeTo("C:/w", "C:/w")).toBeNull();
     expect(relativeTo("C:/w", "C:/other")).toBeNull();
+  });
+});
+
+describe("watchAction", () => {
+  it("routes paths by what the index needs", () => {
+    expect(watchAction(".git/index.lock")).toBe("ignore");
+    expect(watchAction("web/node_modules/x/README.md")).toBe("ignore");
+    expect(watchAction(".synapse.json")).toBe("index");
+    expect(watchAction(".claude/notes.md")).toBe("git");
+    expect(watchAction("docs/.draft.md")).toBe("git");
+    expect(watchAction("docs/A.MD")).toBe("doc");
+    expect(watchAction("docs")).toBe("index");
+    expect(watchAction("src/main.ts")).toBe("index");
   });
 });

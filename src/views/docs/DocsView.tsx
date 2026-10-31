@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MarkdownEditor } from "@/components/MarkdownEditor";
@@ -11,8 +11,10 @@ import { useWorkspace } from "@/store/workspace";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { GitLabel } from "../git/GitLabel";
 import { Backlinks } from "./Backlinks";
-import { GraphView } from "./GraphView";
 import { wikiLinks } from "./wikiLinks";
+
+// pulls in @xyflow/react + d3-force; only load when the graph is opened
+const GraphView = lazy(() => import("./GraphView").then((m) => ({ default: m.GraphView })));
 
 export async function openLink(target: string) {
   const { files, createDoc } = useWorkspace.getState();
@@ -167,7 +169,7 @@ export function DocsMain() {
       </div>
       <div className="min-h-0 flex-1">
         {graph ? (
-          <GraphView />
+          <Suspense><GraphView /></Suspense>
         ) : preview ? (
           <MarkdownPreview path={current!} onLink={(t) => openLink(t).catch(console.error)} />
         ) : (

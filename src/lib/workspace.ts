@@ -51,3 +51,16 @@ export function categorize(rel: string, c: Config): Category {
 
 /** Strip characters that are illegal in Windows filenames (and path separators). */
 export const sanitizeName = (name: string) => name.replace(/[\\/:*?"<>|]/g, "").trim();
+
+/**
+ * What a watcher change to `rel` (workspace-relative) needs: nothing (`.git` / `node_modules`
+ * noise), a git refresh (other dot-paths, which the index skips), a re-read of just that doc,
+ * or a full rescan (folders, config, anything else).
+ */
+export function watchAction(rel: string): "ignore" | "git" | "doc" | "index" {
+  const segs = rel.split("/");
+  if (segs.some((s) => s === ".git" || s === "node_modules")) return "ignore";
+  if (rel === ".synapse.json") return "index";
+  if (segs.some((s) => s.startsWith("."))) return "git";
+  return /\.md$/i.test(rel) ? "doc" : "index";
+}

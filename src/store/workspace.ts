@@ -7,7 +7,7 @@ import { parseMarkdown, resolveLink, rewriteLinks, type ParsedMarkdown } from "@
 import { parseStatus, type GitStatus } from "@/lib/git";
 import { slugify, uniquePath } from "@/lib/board";
 import { setFrontmatterKey } from "@/lib/frontmatter";
-import { categorize, DEFAULT_CONFIG, parseConfig, sanitizeName, type Category, type Config } from "@/lib/workspace";
+import { categorize, DEFAULT_CONFIG, parseConfig, sanitizeName, watchAction, type Category, type Config } from "@/lib/workspace";
 
 export type FileEntry = ParsedMarkdown & { path: string; category: Category; content: string };
 
@@ -53,12 +53,14 @@ const settings = () => load("settings.json");
 const allowWorkspace = (dir: string) => invoke("allow_workspace", { path: dir });
 
 async function walk(root: string, rel: string, out: string[]) {
+  const subdirs: Promise<void>[] = [];
   for (const e of await readDir(rel ? `${root}/${rel}` : root)) {
     if (SKIP(e.name)) continue;
     const p = rel ? `${rel}/${e.name}` : e.name;
-    if (e.isDirectory) await walk(root, p, out);
+    if (e.isDirectory) subdirs.push(walk(root, p, out));
     else if (e.isFile && /\.md$/i.test(e.name)) out.push(p);
   }
+  await Promise.all(subdirs);
 }
 
 export const useWorkspace = create<State>((set, get) => {
@@ -110,18 +112,49 @@ export const useWorkspace = create<State>((set, get) => {
     }
   }
 
+  /** Apply watcher changes: re-read only changed docs when that's enough, else a full index(). */
+  async function refresh(root: string, paths: string[]) {
+    const actions = paths.map(watchAction);
+    if (actions.includes("index")) return index(root);
+    const docs = paths.filter((_, i) => actions[i] === "doc");
+    let contents: string[];
+    try {
+      contents = await Promise.all(docs.map((p) => readTextFile(`${root}/${p}`)));
+    } catch {
+      return index(root); // deleted (or not a file): let the full walk sort it out
+    }
+    set((s) => {
+      if (s.root !== root) return s;
+      // unchanged docs (e.g. the app's own autosave) keep the state as-is so nothing re-renders
+      const stale = docs.filter((p, i) => s.files[p]?.content !== contents[i]);
+      if (!stale.length) return s;
+      const files = { ...s.files };
+      for (const p of stale) files[p] = entry(p, contents[docs.indexOf(p)], s.config);
+      return { files };
+    });
+    await refreshGit(root);
+  }
+
   async function startWatch(root: string) {
     await unwatch?.();
     unwatch = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const changed = new Set<string>();
     unwatch = await watch(
       root,
       (e) => {
-        // ignore noise from .git / node_modules; everything else triggers a rescan
-        const rel = e.paths.map((p) => norm(p).slice(root.length + 1));
-        if (rel.every((p) => p.split("/").some((s) => s === ".git" || s === "node_modules"))) return;
+        if (typeof e.type === "object" && "access" in e.type) return; // reads aren't changes
+        for (const p of e.paths) {
+          const rel = norm(p).slice(root.length + 1);
+          if (watchAction(rel) !== "ignore") changed.add(rel);
+        }
+        if (!changed.size) return;
         clearTimeout(timer);
-        timer = setTimeout(() => active === root && index(root).catch(console.warn), 100);
+        timer = setTimeout(() => {
+          const paths = [...changed];
+          changed.clear();
+          if (active === root) refresh(root, paths).catch(console.warn);
+        }, 100);
       },
       { recursive: true, delayMs: 300 },
     );
