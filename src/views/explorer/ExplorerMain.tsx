@@ -18,6 +18,16 @@ export function ExplorerMain() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [focus]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "e") {
+        e.preventDefault();
+        setPreview((p) => !p);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   if (!current || !exists)
     return <div className="flex flex-1 items-center justify-center text-muted-foreground">Select a file</div>;
   return (
@@ -26,7 +36,7 @@ export function ExplorerMain() {
         <Button variant="ghost" size="sm" title="Esc to exit" onClick={() => useUi.setState({ focus: !focus })}>
           {focus ? "Exit focus" : "Focus"}
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => setPreview((p) => !p)}>
+        <Button variant="ghost" size="sm" title="Ctrl+E" onClick={() => setPreview((p) => !p)}>
           {preview ? "Edit" : "Preview"}
         </Button>
       </div>

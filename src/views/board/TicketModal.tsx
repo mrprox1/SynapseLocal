@@ -101,6 +101,16 @@ export function TicketModal({
   const ext = useMemo(() => wikiLinks((t) => openLink(t).catch(console.error)), []);
   const [editing, setEditing] = useState(false); // body opens as preview
   const [showComments, setShowComments] = useState(() => parseComments(useWorkspace.getState().files[path]?.content ?? "").length > 0);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "e") {
+        e.preventDefault();
+        setEditing((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   if (!fm) return null;
   const priority = typeof fm.priority === "string" ? fm.priority : "";
   return (
@@ -175,7 +185,7 @@ export function TicketModal({
         <Button
           variant="outline"
           size="icon"
-          title={editing ? "Preview" : "Edit"}
+          title={(editing ? "Preview" : "Edit") + " (Ctrl+E)"}
           aria-label={editing ? "Preview" : "Edit"}
           onClick={() => setEditing((e) => !e)}
         >
