@@ -147,3 +147,9 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+CLAUDE.md
+docs/
+# Tauri
+src-tauri/target/
+src-tauri/gen/
