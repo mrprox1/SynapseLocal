@@ -34,13 +34,23 @@ fn move_to_trash(app: AppHandle, root: String, rel: String) -> Result<(), String
     trash::delete(full).map_err(|e| e.to_string())
 }
 
+/// Show an allowed workspace folder in the OS file manager.
+#[tauri::command]
+fn reveal_workspace(app: AppHandle, path: String) -> Result<(), String> {
+    if !app.fs_scope().is_allowed(&path) {
+        return Err("path is outside the workspace".into());
+    }
+    let opener = if cfg!(windows) { "explorer" } else if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
+    std::process::Command::new(opener).arg(&path).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![allow_workspace, move_to_trash])
+        .invoke_handler(tauri::generate_handler![allow_workspace, move_to_trash, reveal_workspace])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

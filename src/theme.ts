@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 // Light/dark via shadcn's `dark` class on <html>. "system" follows the OS live.
 // localStorage (sync) so the right theme is applied before first paint.
@@ -28,7 +28,13 @@ export function setThemeMode(m: ThemeMode) {
     // storage unavailable: the choice lasts for this session only
   }
   apply();
+  listeners.forEach((l) => l());
 }
+
+const listeners = new Set<() => void>();
+/** Current mode; re-renders when `setThemeMode` is called from anywhere. */
+export const useThemeMode = () =>
+  useSyncExternalStore((l) => (listeners.add(l), () => void listeners.delete(l)), getThemeMode);
 
 export function initTheme() {
   apply();

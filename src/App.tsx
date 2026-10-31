@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import {
   FileText,
   FolderInput,
@@ -8,6 +8,7 @@ import {
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
+  Settings,
   Sun,
   type LucideIcon,
 } from "lucide-react";
@@ -19,7 +20,8 @@ import { Board } from "@/views/board/Board";
 import { DocsMain, DocsSidebar } from "@/views/docs/DocsView";
 import { ExplorerMain } from "@/views/explorer/ExplorerMain";
 import { FileTree } from "@/views/explorer/FileTree";
-import { getThemeMode, setThemeMode, type ThemeMode } from "@/theme";
+import { SettingsView } from "@/views/settings/SettingsView";
+import { setThemeMode, useThemeMode, type ThemeMode } from "@/theme";
 
 // click cycles through these
 const THEMES: Record<ThemeMode, { next: ThemeMode; label: string; Icon: LucideIcon }> = {
@@ -38,10 +40,9 @@ export default function App() {
   const { root, files, openFolder, restoreLast } = useWorkspace();
   const { view, setView, sidebar } = useUi();
   const focus = useUi((s) => s.focus) && view === "files"; // only the Explorer has an exit for it
-  const hasSidebar = view !== "board"; // the board has nothing to list
+  const hasSidebar = view !== "board" && view !== "settings"; // these have nothing to list
   const open = () => openFolder().catch(console.error);
-  const [theme, setTheme] = useState(getThemeMode);
-  const T = THEMES[theme];
+  const T = THEMES[useThemeMode()];
   useEffect(() => {
     restoreLast().catch(console.warn);
   }, [restoreLast]);
@@ -79,15 +80,22 @@ export default function App() {
           size="icon"
           title={T.label}
           aria-label={T.label}
-          onClick={() => {
-            setThemeMode(T.next);
-            setTheme(T.next);
-          }}
+          onClick={() => setThemeMode(T.next)}
         >
           <T.Icon />
         </Button>
         <Button variant="ghost" size="icon" title="Open folder…" aria-label="Open folder" onClick={open}>
           <FolderInput />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          title="Settings"
+          aria-label="Settings"
+          className={cn(view === "settings" && "bg-accent")}
+          onClick={() => setView("settings")}
+        >
+          <Settings />
         </Button>
       </nav>}
       {!focus && root && hasSidebar && sidebar && <aside className="flex min-h-0 w-64 flex-col gap-2 border-r p-3">
@@ -99,7 +107,9 @@ export default function App() {
         {view === "files" && <FileTree />}
       </aside>}
       <main className="flex min-w-0 flex-1 flex-col">
-        {!root ? (
+        {view === "settings" ? (
+          <SettingsView />
+        ) : !root ? (
           <div className="flex flex-1 items-center justify-center">
             <Button onClick={open}>Open folder</Button>
           </div>

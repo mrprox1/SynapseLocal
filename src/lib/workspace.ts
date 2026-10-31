@@ -20,6 +20,26 @@ export function parseConfig(text: string | null): Config {
   }
 }
 
+const clean = (v: string) => v.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+
+/** Error message for a folder setting, or null if fine. `other` is the sibling setting it must differ from. */
+export function validateDir(value: string, other: string): string | null {
+  const v = value.trim().replace(/\\/g, "/");
+  if (!clean(v)) return "Folder can't be empty";
+  if (v.startsWith("/") || /^[a-zA-Z]:/.test(v) || v.split("/").includes("..")) return "Folder must be inside the workspace";
+  if (clean(v) === clean(other)) return "Docs and tickets folders must differ";
+  return null;
+}
+
+/** Root-relative form of an absolute `picked` path, or null when it isn't under `root`. */
+export function relativeTo(root: string, picked: string): string | null {
+  const p = picked.replace(/\\/g, "/").replace(/\/+$/, "");
+  return p.startsWith(root + "/") ? p.slice(root.length + 1) : null;
+}
+
+/** Normalised form saved to `.synapse.json`. */
+export const cleanDir = clean;
+
 /** `rel` is root-relative with forward slashes. When one folder is inside the other (e.g. `docs/tasks`), the deeper one wins. */
 export function categorize(rel: string, c: Config): Category {
   const inDocs = rel.startsWith(c.docsDir + "/");

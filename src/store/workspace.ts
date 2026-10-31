@@ -17,6 +17,8 @@ type State = {
   openFolder: () => Promise<void>;
   restoreLast: () => Promise<void>;
   writeFile: (path: string, content: string) => Promise<void>;
+  /** Write `<root>/.synapse.json` and re-index. */
+  saveConfig: (config: Config) => Promise<void>;
   /** Create `<docsDir>/<name>.md` (`# name`) unless it exists; returns its path. */
   createDoc: (name: string) => Promise<string>;
   /** Create `<ticketsDir>/<slug>.md` with title and status; returns its path. */
@@ -190,6 +192,11 @@ export const useWorkspace = create<State>((set, get) => {
         const { [path]: _, ...rest } = s.files;
         return { files: rest };
       });
+    },
+    async saveConfig({ docsDir, ticketsDir }) {
+      const root = get().root!;
+      await writeTextFile(`${root}/.synapse.json`, JSON.stringify({ docsDir, ticketsDir }, null, 2) + "\n");
+      await index(root); // don't wait for the watcher
     },
     async writeFile(path, content) {
       const { root, config } = get();

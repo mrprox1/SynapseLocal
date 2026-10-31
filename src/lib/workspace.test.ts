@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { categorize, DEFAULT_CONFIG, parseConfig, sanitizeName } from "./workspace";
+import { categorize, DEFAULT_CONFIG, parseConfig, relativeTo, sanitizeName, validateDir } from "./workspace";
 
 describe("parseConfig", () => {
   it("defaults when missing, partial, or invalid", () => {
@@ -31,5 +31,29 @@ describe("categorize", () => {
 describe("sanitizeName", () => {
   it("strips illegal chars", () => {
     expect(sanitizeName(' a/b\c:d*e?"f<g>h|i ')).toBe("abcdefghi");
+  });
+});
+
+describe("validateDir", () => {
+  it("accepts inside, nested and not-yet-existing folders", () => {
+    expect(validateDir("wiki", "tickets")).toBeNull();
+    expect(validateDir("docs/tasks/", "docs")).toBeNull();
+    expect(validateDir(["docs", "tasks"].join(String.fromCharCode(92)), "docs")).toBeNull();
+  });
+  it("refuses empty, outside, `..` and same-as-other", () => {
+    expect(validateDir("  ", "x")).not.toBeNull();
+    expect(validateDir("/etc", "x")).not.toBeNull();
+    expect(validateDir("C:/x", "x")).not.toBeNull();
+    expect(validateDir("../x", "y")).not.toBeNull();
+    expect(validateDir("a/../b", "y")).not.toBeNull();
+    expect(validateDir("docs/", "docs")).not.toBeNull();
+  });
+});
+
+describe("relativeTo", () => {
+  it("only accepts paths under root", () => {
+    expect(relativeTo("C:/w", "C:/w/docs/")).toBe("docs");
+    expect(relativeTo("C:/w", "C:/w")).toBeNull();
+    expect(relativeTo("C:/w", "C:/other")).toBeNull();
   });
 });

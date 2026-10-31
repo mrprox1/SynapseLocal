@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { NO_FILTER, type Filter } from "@/lib/board";
 import { useWorkspace } from "@/store/workspace";
 
-export type View = "docs" | "board" | "files";
+export type View = "docs" | "board" | "files" | "settings";
 
 type Ui = {
   view: View;
