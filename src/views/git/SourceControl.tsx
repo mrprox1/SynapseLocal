@@ -8,8 +8,7 @@ import { gitColor } from "./GitLabel";
 
 export function SourceControl() {
   const git = useWorkspace((s) => s.git);
-  const files = useWorkspace((s) => s.files);
-  const openPath = useUi((s) => s.openPath);
+  const selected = useUi((s) => s.selected);
   const [msg, setMsg] = useState<string | null>(null); // null = untouched, show the default
   const [open, setOpen] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -75,7 +74,7 @@ export function SourceControl() {
           {changes.map(([path, code]) => {
             const i = path.lastIndexOf("/");
             const color = { color: gitColor(code) };
-            const clickable = code !== "D" && !!files[path]; // only indexed (.md) files can be opened
+            const clickable = /\.md$/i.test(path); // only markdown gets a diff
             return (
               <li key={path}>
                 <div className="flex items-center gap-1 pl-1">
@@ -83,8 +82,8 @@ export function SourceControl() {
                 <button
                   disabled={!clickable}
                   title={path}
-                  className={cn("flex min-w-0 flex-1 items-center gap-2 rounded px-2 py-1 text-left", clickable && "hover:bg-accent")}
-                  onClick={() => openPath(path)}
+                  className={cn("flex min-w-0 flex-1 items-center gap-2 rounded px-2 py-1 text-left", clickable && "hover:bg-accent", selected === path && "bg-accent")}
+                  onClick={() => useUi.setState({ selected: path })}
                 >
                   <span className={cn("shrink-0", code === "D" && "line-through")} style={color}>
                     {path.slice(i + 1)}

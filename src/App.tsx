@@ -25,6 +25,7 @@ import { Board } from "@/views/board/Board";
 import { DocsMain, DocsSidebar } from "@/views/docs/DocsView";
 import { ExplorerMain } from "@/views/explorer/ExplorerMain";
 import { FileTree } from "@/views/explorer/FileTree";
+import { DiffView } from "@/views/git/DiffView";
 import { SourceControl } from "@/views/git/SourceControl";
 import { SettingsView } from "@/views/settings/SettingsView";
 import { NEXT_THEME, setThemeMode, useThemeMode, type ThemeMode } from "@/theme";
@@ -158,6 +159,8 @@ export default function App() {
           <DocsMain />
         ) : view === "board" ? (
           <Board />
+        ) : view === "git" ? (
+          <DiffView />
         ) : (
           <ExplorerMain />
         )}

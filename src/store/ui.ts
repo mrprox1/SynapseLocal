@@ -7,6 +7,7 @@ export type View = "docs" | "board" | "files" | "git" | "settings";
 type Ui = {
   view: View;
   current: string | null; // path of the file open in the editor
+  selected: string | null; // change shown in the Source Control diff; session-only
   focus: boolean; // Explorer focus mode
   graph: boolean; // Docs graph view; session-only
   sidebar: boolean; // sidebar expanded (Docs / Files)
@@ -25,6 +26,7 @@ type Ui = {
 export const useUi = create<Ui>((set) => ({
   view: "docs",
   current: null,
+  selected: null,
   focus: false,
   graph: false,
   sidebar: true,

@@ -102,6 +102,28 @@ fn git_commit(app: AppHandle, root: String, message: String, paths: Vec<String>)
     Ok(())
 }
 
+/// Unified diff of one workspace-relative `path` against HEAD; untracked files diff as fully added.
+#[tauri::command]
+fn git_diff(app: AppHandle, root: String, path: String) -> Result<String, String> {
+    if !app.fs_scope().is_allowed(&root) {
+        return Err("path is outside the workspace".into());
+    }
+    let ok = |args: &[&str]| git(&root, args).map(|o| o.status.success()).unwrap_or(false);
+    let args: Vec<&str> = if !ok(&["--literal-pathspecs", "ls-files", "--error-unmatch", "--", &path]) {
+        vec!["--literal-pathspecs", "diff", "--no-index", "--", "/dev/null", &path]
+    } else if ok(&["rev-parse", "--verify", "-q", "HEAD"]) {
+        vec!["--literal-pathspecs", "diff", "HEAD", "--", &path]
+    } else {
+        vec!["--literal-pathspecs", "diff", "--", &path]
+    };
+    let o = git(&root, &args).map_err(|e| e.to_string())?;
+    // --no-index exits 1 when the files differ
+    if !o.status.success() && o.status.code() != Some(1) {
+        return Err(String::from_utf8_lossy(&o.stderr).trim().to_string());
+    }
+    Ok(String::from_utf8_lossy(&o.stdout).into_owned())
+}
+
 /// The running `claude` child, if any (one chat run at a time).
 #[derive(Default)]
 struct Claude(Mutex<Option<Child>>);
@@ -185,7 +207,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![allow_workspace, move_to_trash, reveal_workspace, git_status, git_commit, claude_run, claude_stop])
+        .invoke_handler(tauri::generate_handler![allow_workspace, move_to_trash, reveal_workspace, git_status, git_commit, git_diff, claude_run, claude_stop])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
