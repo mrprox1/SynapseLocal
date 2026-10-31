@@ -3,6 +3,8 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { exists, mkdir, readDir, rename, readTextFile, watch, writeTextFile, type UnwatchFn } from "@tauri-apps/plugin-fs";
 import { load } from "@tauri-apps/plugin-store";
 import { parseMarkdown, resolveLink, rewriteLinks, type ParsedMarkdown } from "@/lib/markdown";
+import { slugify, uniquePath } from "@/lib/board";
+import { setFrontmatterKey } from "@/lib/frontmatter";
 import { categorize, DEFAULT_CONFIG, parseConfig, sanitizeName, type Category, type Config } from "@/lib/workspace";
 
 export type FileEntry = ParsedMarkdown & { path: string; category: Category; content: string };
@@ -16,6 +18,8 @@ type State = {
   writeFile: (path: string, content: string) => Promise<void>;
   /** Create `<docsDir>/<name>.md` (`# name`) unless it exists; returns its path. */
   createDoc: (name: string) => Promise<string>;
+  /** Create `<ticketsDir>/<slug>.md` with title and status; returns its path. */
+  createTicket: (title: string, status: string) => Promise<string>;
   /**
    * Rename a doc in place. If other files link to it, `confirm(links, files)` decides
    * whether their `[[links]]` are rewritten. Returns the new path.
@@ -111,6 +115,15 @@ export const useWorkspace = create<State>((set, get) => {
         await mkdir(`${root}/${config.docsDir}`, { recursive: true });
         await get().writeFile(path, `# ${clean}\n`);
       }
+      return path;
+    },
+    async createTicket(title, status) {
+      const { root, config, files } = get();
+      const t = title.trim();
+      if (!t) throw new Error("empty title");
+      const path = uniquePath(config.ticketsDir, slugify(t), Object.keys(files));
+      await mkdir(`${root}/${config.ticketsDir}`, { recursive: true });
+      await get().writeFile(path, setFrontmatterKey(setFrontmatterKey("", "title", t), "status", status));
       return path;
     },
     async renameDoc(path, name, confirm) {

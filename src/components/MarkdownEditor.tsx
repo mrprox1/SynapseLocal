@@ -4,6 +4,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { EditorView } from "@codemirror/view";
 import type { Extension } from "@codemirror/state";
+import { parseMarkdown } from "@/lib/markdown";
 import { useWorkspace } from "@/store/workspace";
 
 const base = [markdown({ codeLanguages: languages }), EditorView.lineWrapping];
@@ -20,8 +21,19 @@ function useIsDark() {
   return dark;
 }
 
-export function MarkdownEditor({ path, extensions = [] }: { path: string; extensions?: Extension[] }) {
-  const stored = useWorkspace((s) => s.files[path]?.content);
+/** `bodyOnly` hides the frontmatter block; saves keep the file's current one. */
+export function MarkdownEditor({
+  path,
+  extensions = [],
+  bodyOnly = false,
+}: {
+  path: string;
+  extensions?: Extension[];
+  bodyOnly?: boolean;
+}) {
+  const bodyOf = (c: string) => (bodyOnly ? parseMarkdown("", c).body : c);
+  const content = useWorkspace((s) => s.files[path]?.content);
+  const stored = content === undefined ? undefined : bodyOf(content);
   const writeFile = useWorkspace((s) => s.writeFile);
   const dark = useIsDark();
   const [value, setValue] = useState(stored ?? "");
@@ -35,12 +47,14 @@ export function MarkdownEditor({ path, extensions = [] }: { path: string; extens
     if (!dirty.current) return;
     dirty.current = false;
     const { path: p, value: v } = latest.current;
-    if (v !== useWorkspace.getState().files[p]?.content) writeFile(p, v).catch(console.error);
+    const cur = useWorkspace.getState().files[p]?.content ?? "";
+    const full = cur.slice(0, cur.length - bodyOf(cur).length) + v;
+    if (full !== cur) writeFile(p, full).catch(console.error);
   };
 
   // Switching files (or unmounting) flushes the pending save for the old file.
   useEffect(() => {
-    setValue(useWorkspace.getState().files[path]?.content ?? "");
+    setValue(bodyOf(useWorkspace.getState().files[path]?.content ?? ""));
     return flush;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path]);

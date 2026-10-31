@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useUi, type View } from "@/store/ui";
 import { useWorkspace } from "@/store/workspace";
 import { cn } from "@/lib/utils";
+import { Board } from "@/views/board/Board";
 import { DocsMain, DocsSidebar } from "@/views/docs/DocsView";
 
 const VIEWS: { id: View; label: string; Icon: LucideIcon }[] = [
@@ -48,6 +49,8 @@ export default function App() {
       <main className="flex min-w-0 flex-1 flex-col">
         {view === "docs" ? (
           <DocsMain />
+        ) : view === "board" ? (
+          <Board />
         ) : (
           <div className="flex flex-1 items-center justify-center text-muted-foreground">
             {view} view — coming soon
