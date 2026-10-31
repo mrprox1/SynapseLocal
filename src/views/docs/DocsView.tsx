@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MarkdownEditor } from "@/components/MarkdownEditor";
 import { MarkdownPreview } from "@/components/MarkdownPreview";
 import { resolveLink } from "@/lib/markdown";
+import { buildTree, type TreeNode } from "@/lib/tree";
 import { cn } from "@/lib/utils";
 import { useUi } from "@/store/ui";
 import { useWorkspace } from "@/store/workspace";
@@ -23,9 +25,52 @@ export function DocsSidebar() {
   const { current, openPath } = useUi();
   const [name, setName] = useState<string | null>(null);
 
-  const docs = Object.values(files)
-    .filter((f) => f.category === "doc")
-    .sort((a, b) => a.title.localeCompare(b.title));
+  const [closed, setClosed] = useState<Set<string>>(new Set());
+  // tree of paths relative to the docs folder; with no subfolders it is a flat list
+  const tree = useMemo(
+    () =>
+      buildTree(
+        Object.values(files)
+          .filter((f) => f.category === "doc")
+          .map((f) => f.path.slice(docsDir.length + 1)),
+      ),
+    [files, docsDir],
+  );
+  const title = (rel: string) => files[`${docsDir}/${rel}`].title;
+
+  // folders first (by name, from buildTree), then docs by title
+  const rows = (ns: TreeNode[], depth: number): ReactNode[] =>
+    [
+      ...ns.filter((n) => n.children),
+      ...ns.filter((n) => !n.children).sort((a, b) => title(a.path).localeCompare(title(b.path))),
+    ].map((n) => {
+      const path = `${docsDir}/${n.path}`;
+      const open = !closed.has(n.path);
+      return (
+        <li key={n.path}>
+          <button
+            className={cn(
+              "flex w-full items-center gap-1 truncate rounded px-2 py-1 text-left hover:bg-accent",
+              current === path && "bg-accent",
+            )}
+            style={{ paddingLeft: 8 + depth * 12 }}
+            onClick={() =>
+              n.children
+                ? setClosed((c) => {
+                    const next = new Set(c);
+                    if (!next.delete(n.path)) next.add(n.path);
+                    return next;
+                  })
+                : openPath(path)
+            }
+          >
+            {n.children && (open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />)}
+            {n.children ? n.name : title(n.path)}
+          </button>
+          {n.children && open && <ul>{rows(n.children, depth + 1)}</ul>}
+        </li>
+      );
+    });
 
   const create = async () => {
     const n = name?.trim();
@@ -53,26 +98,7 @@ export function DocsSidebar() {
           onBlur={() => setName(null)}
         />
       )}
-      <ul className="min-h-0 overflow-auto text-sm">
-        {docs.map((f) => {
-          // shortcut: flat list with the subfolder shown as a prefix, no tree until task 015
-          const sub = f.path.slice(docsDir.length + 1).split("/").slice(0, -1).join("/");
-          return (
-            <li key={f.path}>
-              <button
-                className={cn(
-                  "w-full truncate rounded px-2 py-1 text-left hover:bg-accent",
-                  current === f.path && "bg-accent",
-                )}
-                onClick={() => openPath(f.path)}
-              >
-                {sub && <span className="text-muted-foreground">{sub}/ </span>}
-                {f.title}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      <ul className="min-h-0 overflow-auto text-sm">{rows(tree, 0)}</ul>
     </div>
   );
 }

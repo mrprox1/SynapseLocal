@@ -38,6 +38,8 @@ let unwatch: UnwatchFn | null = null;
 const norm = (p: string) => p.split("\\").join("/");
 const SKIP =(name: string) => name.startsWith(".") || name === "node_modules";
 const settings = () => load("settings.json");
+/** Fs access is granted per workspace by the Rust side; must run before touching `dir`. */
+const allowWorkspace = (dir: string) => invoke("allow_workspace", { path: dir });
 
 async function walk(root: string, rel: string, out: string[]) {
   for (const e of await readDir(rel ? `${root}/${rel}` : root)) {
@@ -100,6 +102,7 @@ export const useWorkspace = create<State>((set, get) => {
     async openFolder() {
       const dir = await open({ directory: true });
       if (typeof dir !== "string") return;
+      await allowWorkspace(dir);
       await index(dir);
       await startWatch(norm(dir));
       const s = await settings();
@@ -108,7 +111,8 @@ export const useWorkspace = create<State>((set, get) => {
     },
     async restoreLast() {
       const last = await (await settings()).get<string>("lastRoot");
-      if (last && (await exists(last))) {
+      // rejects when the folder is gone
+      if (last && (await allowWorkspace(last).then(() => true, () => false))) {
         await index(last);
         await startWatch(norm(last));
       }
