@@ -10,6 +10,7 @@ type Ui = {
   focus: boolean; // Explorer focus mode
   graph: boolean; // Docs graph view; session-only
   sidebar: boolean; // sidebar expanded (Docs / Files)
+  chat: boolean; // Claude chat panel; session-only
   boardFilter: Filter; // session-only
   showArchived: boolean; // session-only
   jump: { path: string; from: number; to: number } | null; // select this range once the file is open; session-only
@@ -27,6 +28,7 @@ export const useUi = create<Ui>((set) => ({
   focus: false,
   graph: false,
   sidebar: true,
+  chat: false,
   boardFilter: NO_FILTER,
   showArchived: false,
   jump: null,

@@ -1,5 +1,8 @@
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Component, Path};
-use tauri::{AppHandle, Manager};
+use std::process::{Child, Stdio};
+use std::sync::Mutex;
+use tauri::{AppHandle, Manager, State};
 use tauri_plugin_fs::FsExt;
 
 /// Grant the webview fs and asset-protocol access to `path` (recursively). Nothing else is allowed.
@@ -99,13 +102,90 @@ fn git_commit(app: AppHandle, root: String, message: String, paths: Vec<String>)
     Ok(())
 }
 
+/// The running `claude` child, if any (one chat run at a time).
+#[derive(Default)]
+struct Claude(Mutex<Option<Child>>);
+
+/// Run the `claude` CLI headless in an allowed workspace, forwarding each stdout line (stream-json) through
+/// `on_event`, then a final `{"type":"exit",...}` line. `Err("claude-not-found")` when it is not installed.
+// shortcut: on Windows only claude.exe is found, not an npm claude.cmd; upgrade if users hit it.
+#[tauri::command]
+fn claude_run(
+    app: AppHandle,
+    state: State<Claude>,
+    root: String,
+    message: String,
+    session_id: Option<String>,
+    on_event: tauri::ipc::Channel<String>,
+) -> Result<(), String> {
+    if !app.fs_scope().is_allowed(&root) {
+        return Err("path is outside the workspace".into());
+    }
+    let mut slot = state.0.lock().unwrap();
+    if slot.is_some() {
+        return Err("busy".into());
+    }
+    let mut cmd = std::process::Command::new("claude");
+    cmd.current_dir(&root)
+        .args(["-p", "--output-format", "stream-json", "--verbose", "--restricted", "--tools", "Read,Edit,Write,Glob,Grep"])
+        .args(["--strict-mcp-config", "--permission-mode", "acceptEdits", "--permission-prompts", "none"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    if let Some(id) = &session_id {
+        cmd.args(["--resume", id]);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    let mut child = cmd.spawn().map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound { "claude-not-found".into() } else { e.to_string() }
+    })?;
+    // the message goes on stdin so quoting and a leading `-` can't matter
+    let mut stdin = child.stdin.take().unwrap();
+    let stdout = child.stdout.take().unwrap();
+    let mut stderr = child.stderr.take().unwrap();
+    *slot = Some(child);
+    drop(slot);
+
+    std::thread::spawn(move || {
+        let _ = stdin.write_all(message.as_bytes()); // dropped → EOF
+    });
+    let err_thread = std::thread::spawn(move || {
+        let mut buf = String::new();
+        let _ = stderr.read_to_string(&mut buf);
+        buf
+    });
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            let _ = on_event.send(line);
+        }
+        let stderr = err_thread.join().unwrap_or_default();
+        let child = app.state::<Claude>().0.lock().unwrap().take();
+        let code = child.and_then(|mut c| c.wait().ok()).and_then(|s| s.code());
+        let _ = on_event.send(serde_json::json!({ "type": "exit", "code": code, "stderr": stderr }).to_string());
+    });
+    Ok(())
+}
+
+/// Kill the running chat; the reader thread then sends the `exit` event as usual.
+#[tauri::command]
+fn claude_stop(state: State<Claude>) {
+    if let Some(c) = state.0.lock().unwrap().as_mut() {
+        let _ = c.kill();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(Claude::default())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![allow_workspace, move_to_trash, reveal_workspace, git_status, git_commit])
+        .invoke_handler(tauri::generate_handler![allow_workspace, move_to_trash, reveal_workspace, git_status, git_commit, claude_run, claude_stop])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

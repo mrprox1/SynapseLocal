@@ -5,6 +5,7 @@ import {
   FolderInput,
   FolderOpen,
   KanbanSquare,
+  MessageSquare,
   Monitor,
   Moon,
   PanelLeftClose,
@@ -14,6 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { CommandPalette } from "@/components/CommandPalette";
+import { ChatPanel } from "@/views/chat/ChatPanel";
 import { SearchDialog } from "@/components/SearchDialog";
 import { Button } from "@/components/ui/button";
 import { useUi, type View } from "@/store/ui";
@@ -43,7 +45,7 @@ const VIEWS: { id: View; label: string; Icon: LucideIcon }[] = [
 
 export default function App() {
   const { root, files, openFolder, restoreLast } = useWorkspace();
-  const { view, setView, sidebar } = useUi();
+  const { view, setView, sidebar, chat } = useUi();
   const focus = useUi((s) => s.focus) && view === "files"; // only the Explorer has an exit for it
   const hasSidebar = view !== "board" && view !== "settings"; // these have nothing to list
   const changes = useWorkspace((s) => (s.git ? Object.keys(s.git.files).length : null)); // null = not a repo
@@ -53,6 +55,17 @@ export default function App() {
   useEffect(() => {
     if (changes === null && view === "git") setView("docs");
   }, [changes, view, setView]);
+  useEffect(() => {
+    // capture phase + preventDefault: overrides CodeMirror's select-line (Mod-l)
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "l") {
+        e.preventDefault();
+        useUi.setState((s) => ({ chat: !s.chat }));
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
   useEffect(() => {
     restoreLast().catch(console.warn);
   }, [restoreLast]);
@@ -79,6 +92,18 @@ export default function App() {
           </Button>
         ))}
         <div className="flex-1" />
+        {root && (
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Claude chat (Ctrl+L)"
+            aria-label="Claude chat"
+            className={cn(chat && "bg-accent")}
+            onClick={() => useUi.setState({ chat: !chat })}
+          >
+            <MessageSquare />
+          </Button>
+        )}
         {root && hasSidebar && (
           <Button
             variant="ghost"
@@ -137,6 +162,7 @@ export default function App() {
           <ExplorerMain />
         )}
       </main>
+      {!focus && root && chat && <ChatPanel />}
       <CommandPalette />
       <SearchDialog />
     </div>
