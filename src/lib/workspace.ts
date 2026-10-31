@@ -26,3 +26,6 @@ export function categorize(rel: string, c: Config): Category {
   if (rel.startsWith(c.ticketsDir + "/")) return "ticket";
   return "other";
 }
+
+/** Strip characters that are illegal in Windows filenames (and path separators). */
+export const sanitizeName = (name: string) => name.replace(/[\\/:*?"<>|]/g, "").trim();

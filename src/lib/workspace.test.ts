@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { categorize, DEFAULT_CONFIG, parseConfig } from "./workspace";
+import { categorize, DEFAULT_CONFIG, parseConfig, sanitizeName } from "./workspace";
 
 describe("parseConfig", () => {
   it("defaults when missing, partial, or invalid", () => {
@@ -17,5 +17,11 @@ describe("categorize", () => {
     expect(categorize("tickets/t.md", c)).toBe("ticket");
     expect(categorize("docs/a.md", c)).toBe("other");
     expect(categorize("wikipedia/a.md", c)).toBe("other");
+  });
+});
+
+describe("sanitizeName", () => {
+  it("strips illegal chars", () => {
+    expect(sanitizeName(' a/b\c:d*e?"f<g>h|i ')).toBe("abcdefghi");
   });
 });

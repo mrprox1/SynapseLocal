@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useUi, type View } from "@/store/ui";
 import { useWorkspace } from "@/store/workspace";
 import { cn } from "@/lib/utils";
+import { DocsMain, DocsSidebar } from "@/views/docs/DocsView";
 
 const VIEWS: { id: View; label: string; Icon: LucideIcon }[] = [
   { id: "docs", label: "Docs", Icon: FileText },
@@ -35,17 +36,23 @@ export default function App() {
           </Button>
         ))}
       </nav>
-      <aside className="flex w-64 flex-col gap-2 border-r p-3">
+      <aside className="flex min-h-0 w-64 flex-col gap-2 border-r p-3">
         <Button onClick={() => openFolder().catch(console.error)}>Open folder</Button>
         {root && (
           <p className="text-xs text-muted-foreground">
             {root}: {Object.keys(files).length} files
           </p>
         )}
-        <p className="text-sm text-muted-foreground">{view} sidebar</p>
+        {view === "docs" && <DocsSidebar />}
       </aside>
-      <main className="flex min-w-0 flex-1 items-center justify-center text-muted-foreground">
-        {view} view — coming soon
+      <main className="flex min-w-0 flex-1 flex-col">
+        {view === "docs" ? (
+          <DocsMain />
+        ) : (
+          <div className="flex flex-1 items-center justify-center text-muted-foreground">
+            {view} view — coming soon
+          </div>
+        )}
       </main>
     </div>
   );

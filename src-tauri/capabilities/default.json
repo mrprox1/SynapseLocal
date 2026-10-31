@@ -50,6 +50,14 @@
         }
       ]
     },
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
+    },
     "fs:allow-unwatch"
   ]
 }

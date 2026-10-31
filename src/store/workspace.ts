@@ -1,9 +1,9 @@
 import { create } from "zustand";
 import { open } from "@tauri-apps/plugin-dialog";
-import { exists, readDir, readTextFile, watch, writeTextFile, type UnwatchFn } from "@tauri-apps/plugin-fs";
+import { exists, mkdir, readDir, readTextFile, watch, writeTextFile, type UnwatchFn } from "@tauri-apps/plugin-fs";
 import { load } from "@tauri-apps/plugin-store";
 import { parseMarkdown, type ParsedMarkdown } from "@/lib/markdown";
-import { categorize, DEFAULT_CONFIG, parseConfig, type Category, type Config } from "@/lib/workspace";
+import { categorize, DEFAULT_CONFIG, parseConfig, sanitizeName, type Category, type Config } from "@/lib/workspace";
 
 export type FileEntry = ParsedMarkdown & { path: string; category: Category; content: string };
 
@@ -14,6 +14,8 @@ type State = {
   openFolder: () => Promise<void>;
   restoreLast: () => Promise<void>;
   writeFile: (path: string, content: string) => Promise<void>;
+  /** Create `<docsDir>/<name>.md` (`# name`) unless it exists; returns its path. */
+  createDoc: (name: string) => Promise<string>;
 };
 
 let unwatch: UnwatchFn | null = null;
@@ -94,6 +96,17 @@ export const useWorkspace = create<State>((set, get) => {
         await index(last);
         await startWatch(norm(last));
       }
+    },
+    async createDoc(name) {
+      const { root, config, files } = get();
+      const clean = sanitizeName(name);
+      if (!clean) throw new Error("empty name");
+      const path = `${config.docsDir}/${clean}.md`;
+      if (!files[path]) {
+        await mkdir(`${root}/${config.docsDir}`, { recursive: true });
+        await get().writeFile(path, `# ${clean}\n`);
+      }
+      return path;
     },
     async writeFile(path, content) {
       const { root, config } = get();
