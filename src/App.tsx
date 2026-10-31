@@ -1,22 +1,52 @@
 import { useEffect } from "react";
+import { FileText, FolderOpen, KanbanSquare, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useUi, type View } from "@/store/ui";
 import { useWorkspace } from "@/store/workspace";
+import { cn } from "@/lib/utils";
+
+const VIEWS: { id: View; label: string; Icon: LucideIcon }[] = [
+  { id: "docs", label: "Docs", Icon: FileText },
+  { id: "board", label: "Board", Icon: KanbanSquare },
+  { id: "files", label: "Files", Icon: FolderOpen },
+];
 
 export default function App() {
   const { root, files, openFolder, restoreLast } = useWorkspace();
+  const { view, setView } = useUi();
   useEffect(() => {
     restoreLast().catch(console.warn);
   }, [restoreLast]);
 
   return (
-    <main className="flex h-screen flex-col items-center justify-center gap-4">
-      <h1 className="text-3xl font-bold text-primary">SynapseLocal</h1>
-      <Button onClick={() => openFolder().catch(console.error)}>Open folder</Button>
-      {root && (
-        <p className="text-sm text-muted-foreground">
-          {root}: {Object.keys(files).length} files
-        </p>
-      )}
-    </main>
+    <div className="flex h-screen">
+      <nav className="flex w-14 flex-col items-center gap-2 border-r py-2">
+        {VIEWS.map(({ id, label, Icon }) => (
+          <Button
+            key={id}
+            variant="ghost"
+            size="icon"
+            title={label}
+            aria-label={label}
+            className={cn(view === id && "bg-accent")}
+            onClick={() => setView(id)}
+          >
+            <Icon />
+          </Button>
+        ))}
+      </nav>
+      <aside className="flex w-64 flex-col gap-2 border-r p-3">
+        <Button onClick={() => openFolder().catch(console.error)}>Open folder</Button>
+        {root && (
+          <p className="text-xs text-muted-foreground">
+            {root}: {Object.keys(files).length} files
+          </p>
+        )}
+        <p className="text-sm text-muted-foreground">{view} sidebar</p>
+      </aside>
+      <main className="flex min-w-0 flex-1 items-center justify-center text-muted-foreground">
+        {view} view — coming soon
+      </main>
+    </div>
   );
 }
