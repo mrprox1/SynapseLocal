@@ -59,7 +59,7 @@ export function MarkdownPreview({
             href?.startsWith("wiki:") ? (
               <a
                 href="#"
-                className="cursor-pointer text-blue-600 underline"
+                className="cursor-pointer text-blue-600 underline dark:text-blue-400"
                 onClick={(e) => {
                   e.preventDefault();
                   onLink(decodeURIComponent(href.slice(5)));

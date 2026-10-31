@@ -1,5 +1,16 @@
-import { useEffect } from "react";
-import { FileText, FolderInput, FolderOpen, KanbanSquare, PanelLeftClose, PanelLeftOpen, type LucideIcon } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  FileText,
+  FolderInput,
+  FolderOpen,
+  KanbanSquare,
+  Monitor,
+  Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Sun,
+  type LucideIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUi, type View } from "@/store/ui";
 import { useWorkspace } from "@/store/workspace";
@@ -8,6 +19,14 @@ import { Board } from "@/views/board/Board";
 import { DocsMain, DocsSidebar } from "@/views/docs/DocsView";
 import { ExplorerMain } from "@/views/explorer/ExplorerMain";
 import { FileTree } from "@/views/explorer/FileTree";
+import { getThemeMode, setThemeMode, type ThemeMode } from "@/theme";
+
+// click cycles through these
+const THEMES: Record<ThemeMode, { next: ThemeMode; label: string; Icon: LucideIcon }> = {
+  system: { next: "dark", label: "Theme: System", Icon: Monitor },
+  dark: { next: "light", label: "Theme: Dark", Icon: Moon },
+  light: { next: "system", label: "Theme: Light", Icon: Sun },
+};
 
 const VIEWS: { id: View; label: string; Icon: LucideIcon }[] = [
   { id: "docs", label: "Docs", Icon: FileText },
@@ -21,6 +40,8 @@ export default function App() {
   const focus = useUi((s) => s.focus) && view === "files"; // only the Explorer has an exit for it
   const hasSidebar = view !== "board"; // the board has nothing to list
   const open = () => openFolder().catch(console.error);
+  const [theme, setTheme] = useState(getThemeMode);
+  const T = THEMES[theme];
   useEffect(() => {
     restoreLast().catch(console.warn);
   }, [restoreLast]);
@@ -53,6 +74,18 @@ export default function App() {
             {sidebar ? <PanelLeftClose /> : <PanelLeftOpen />}
           </Button>
         )}
+        <Button
+          variant="ghost"
+          size="icon"
+          title={T.label}
+          aria-label={T.label}
+          onClick={() => {
+            setThemeMode(T.next);
+            setTheme(T.next);
+          }}
+        >
+          <T.Icon />
+        </Button>
         <Button variant="ghost" size="icon" title="Open folder…" aria-label="Open folder" onClick={open}>
           <FolderInput />
         </Button>

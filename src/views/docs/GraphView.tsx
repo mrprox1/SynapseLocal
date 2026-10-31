@@ -5,12 +5,14 @@ import { forceCenter, forceLink, forceManyBody, forceSimulation, type Simulation
 import { resolveLink } from "@/lib/markdown";
 import { useUi } from "@/store/ui";
 import { useWorkspace } from "@/store/workspace";
+import { useIsDark } from "@/theme";
 
 type Sim = SimulationNodeDatum & { id: string; label: string };
 
 export function GraphView() {
   const files = useWorkspace((s) => s.files);
   const { current, openPath } = useUi();
+  const dark = useIsDark();
 
   const docs = useMemo(
     () => Object.values(files).filter((f) => f.category === "doc"),
@@ -57,8 +59,7 @@ export function GraphView() {
     style: {
       opacity: !current || near.has(n.id) ? 1 : 0.3,
       fontWeight: n.id === current ? 700 : 400,
-      border: n.id === current ? "2px solid #2563eb" : undefined,
-      color: "#111",
+      border: n.id === current ? "2px solid #3b82f6" : undefined,
     },
   }));
   const shownEdges: Edge[] = edges.map(([source, target]) => ({
@@ -75,6 +76,7 @@ export function GraphView() {
       onNodesChange={(c) => setNodes((ns) => applyNodeChanges(c, ns))}
       onNodeClick={(_, n) => openPath(n.id)}
       nodesConnectable={false}
+      colorMode={dark ? "dark" : "light"}
       fitView
     >
       <Background />

@@ -76,6 +76,7 @@ const marker = ViewPlugin.fromClass(
 
 const theme = EditorView.baseTheme({
   ".cm-wikilink": { color: "#2563eb", cursor: "pointer" },
+  "&dark .cm-wikilink": { color: "#60a5fa" },
   ".cm-wikilink-missing": { color: "#9ca3af", textDecoration: "underline dashed" },
 });
 

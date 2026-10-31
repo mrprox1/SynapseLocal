@@ -144,3 +144,19 @@
 .prose-preview :not(pre) > code { padding: 0.1rem 0.3rem; border-radius: 0.25rem; background: var(--muted); }
 .prose-preview table { border-collapse: collapse; }
 .prose-preview th, .prose-preview td { border: 1px solid var(--border); padding: 0.25rem 0.6rem; }
+.prose-preview .hljs { background: transparent; }
+
+/* highlight.js colours for dark mode (from github-dark; github.css stays the light default) */
+.dark .prose-preview .hljs { color: #c9d1d9; }
+.dark .prose-preview :is(.hljs-doctag, .hljs-keyword, .hljs-template-tag, .hljs-template-variable, .hljs-type) { color: #ff7b72; }
+.dark .prose-preview :is(.hljs-title, .hljs-title.function_, .hljs-title.class_) { color: #d2a8ff; }
+.dark .prose-preview :is(.hljs-attr, .hljs-attribute, .hljs-literal, .hljs-meta, .hljs-number, .hljs-operator, .hljs-variable, .hljs-selector-attr, .hljs-selector-class, .hljs-selector-id) { color: #79c0ff; }
+.dark .prose-preview :is(.hljs-regexp, .hljs-string) { color: #a5d6ff; }
+.dark .prose-preview :is(.hljs-built_in, .hljs-symbol) { color: #ffa657; }
+.dark .prose-preview :is(.hljs-comment, .hljs-code, .hljs-formula) { color: #8b949e; }
+.dark .prose-preview :is(.hljs-name, .hljs-quote, .hljs-selector-tag, .hljs-selector-pseudo) { color: #7ee787; }
+.dark .prose-preview :is(.hljs-subst, .hljs-emphasis, .hljs-strong) { color: #c9d1d9; }
+.dark .prose-preview .hljs-section { color: #1f6feb; }
+.dark .prose-preview .hljs-bullet { color: #f2cc60; }
+.dark .prose-preview .hljs-addition { color: #aff5b4; background-color: #033a16; }
+.dark .prose-preview .hljs-deletion { color: #ffdcd7; background-color: #67060c; }

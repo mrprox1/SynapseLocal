@@ -3,23 +3,17 @@ import CodeMirror from "@uiw/react-codemirror";
 import { markdown } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { EditorView } from "@codemirror/view";
-import type { Extension } from "@codemirror/state";
+import { Prec, type Extension } from "@codemirror/state";
 import { parseMarkdown } from "@/lib/markdown";
 import { useWorkspace } from "@/store/workspace";
+import { useIsDark } from "@/theme";
 
-const base = [markdown({ codeLanguages: languages }), EditorView.lineWrapping];
-
-function useIsDark() {
-  const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
-  useEffect(() => {
-    const obs = new MutationObserver(() =>
-      setDark(document.documentElement.classList.contains("dark")),
-    );
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-    return () => obs.disconnect();
-  }, []);
-  return dark;
-}
+const base = [
+  markdown({ codeLanguages: languages }),
+  EditorView.lineWrapping,
+  // let the app background show through instead of the CodeMirror theme's own
+  Prec.highest(EditorView.theme({ "&": { backgroundColor: "transparent" }, ".cm-gutters": { backgroundColor: "transparent" } })),
+];
 
 /** `bodyOnly` hides the frontmatter block; saves keep the file's current one. */
 export function MarkdownEditor({
