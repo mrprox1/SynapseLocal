@@ -118,10 +118,11 @@ export const useWorkspace = create<State>((set, get) => {
       const clean = sanitizeName(name);
       if (!clean) throw new Error("empty name");
       const path = `${config.docsDir}/${clean}.md`;
-      if (!files[path]) {
-        await mkdir(`${root}/${config.docsDir}`, { recursive: true });
-        await get().writeFile(path, `# ${clean}\n`);
-      }
+      // case-insensitive: on Windows `readme.md` would overwrite an existing `README.md`
+      const hit = Object.keys(files).find((p) => p.toLowerCase() === path.toLowerCase());
+      if (hit) return hit;
+      await mkdir(`${root}/${config.docsDir}`, { recursive: true });
+      await get().writeFile(path, `# ${clean}\n`);
       return path;
     },
     async createTicket(title, status) {

@@ -30,7 +30,11 @@ export function Board() {
   const [active, setActive] = useState<string | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    // Space picks up a card; Enter is left free to open it
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+      keyboardCodes: { start: ["Space"], cancel: ["Escape"], end: ["Space", "Enter"] },
+    }),
   );
 
   const cards = useMemo(
@@ -82,7 +86,13 @@ export function Board() {
     }
     if (to === card.status && index === cols[to].findIndex((c) => c.path === id)) return;
 
-    const orders = placeCard(cols[to].filter((c) => c.path !== id), id, index);
+    // Place against the unfiltered column so hidden cards keep consistent `order` values.
+    const visible = cols[to].filter((c) => c.path !== id);
+    const full = sortCards(cards.filter((c) => c.status === to && c.path !== id));
+    const next = visible[index];
+    const prev = visible[index - 1];
+    const fullIndex = next ? full.indexOf(next) : prev ? full.indexOf(prev) + 1 : full.length;
+    const orders = placeCard(full, id, fullIndex);
     const moves = Object.entries(orders).map(([path, order]) => ({
       path,
       order,

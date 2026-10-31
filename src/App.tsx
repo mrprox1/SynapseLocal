@@ -17,7 +17,8 @@ const VIEWS: { id: View; label: string; Icon: LucideIcon }[] = [
 
 export default function App() {
   const { root, files, openFolder, restoreLast } = useWorkspace();
-  const { view, setView, focus } = useUi();
+  const { view, setView } = useUi();
+  const focus = useUi((s) => s.focus) && view === "files"; // only the Explorer has an exit for it
   useEffect(() => {
     restoreLast().catch(console.warn);
   }, [restoreLast]);

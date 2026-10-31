@@ -38,8 +38,8 @@ export function MarkdownEditor({
   const dark = useIsDark();
   const [value, setValue] = useState(stored ?? "");
   const dirty = useRef(false); // unsaved local edits
+  // Set in the path effect, not during render: the old file's cleanup flush must still see the old path.
   const latest = useRef({ path, value });
-  latest.current = { path, value };
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const flush = () => {
@@ -54,7 +54,9 @@ export function MarkdownEditor({
 
   // Switching files (or unmounting) flushes the pending save for the old file.
   useEffect(() => {
-    setValue(bodyOf(useWorkspace.getState().files[path]?.content ?? ""));
+    const v = bodyOf(useWorkspace.getState().files[path]?.content ?? "");
+    latest.current = { path, value: v };
+    setValue(v);
     return flush;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path]);

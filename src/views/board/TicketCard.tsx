@@ -49,6 +49,10 @@ export function TicketCard({ card, onOpen }: { card: Card; onOpen: (path: string
       {...attributes}
       {...listeners}
       onClick={() => onOpen(card.path)}
+      onKeyDown={(e) => {
+        listeners?.onKeyDown?.(e);
+        if (e.key === "Enter" && !isDragging) onOpen(card.path);
+      }}
     >
       <CardFace card={card} />
     </div>

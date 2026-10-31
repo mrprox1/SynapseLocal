@@ -149,7 +149,7 @@ vite.config.ts.timestamp-*
 .turbo
 
 CLAUDE.md
-docs/
+/docs/
 # Tauri
 src-tauri/target/
 src-tauri/gen/
