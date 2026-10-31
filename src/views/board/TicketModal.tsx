@@ -1,8 +1,11 @@
 import { useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { MarkdownEditor } from "@/components/MarkdownEditor";
+import { MarkdownPreview } from "@/components/MarkdownPreview";
 import { PRIORITIES, STATUSES, ticketStatus } from "@/lib/board";
 import { removeFrontmatterKey, setFrontmatterKey } from "@/lib/frontmatter";
+import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/store/workspace";
 import { openLink } from "@/views/docs/DocsView";
 import { wikiLinks } from "@/views/docs/wikiLinks";
@@ -17,14 +20,14 @@ function put(path: string, key: string, value: string) {
   if (next !== c) writeFile(path, next).catch(console.error);
 }
 
-function Text({ path, field, label }: { path: string; field: string; label: string }) {
+function Text({ path, field, label, className }: { path: string; field: string; label: string; className?: string }) {
   const stored = useWorkspace((s) => {
     const v = s.files[path]?.frontmatter[field];
     return v == null ? "" : String(v);
   });
   const [v, setV] = useState(stored);
   return (
-    <label className="flex flex-1 flex-col gap-1 text-xs text-muted-foreground">
+    <label className={cn("flex flex-col gap-1 text-xs text-muted-foreground", className)}>
       {label}
       <input
         className={input}
@@ -40,6 +43,7 @@ function Text({ path, field, label }: { path: string; field: string; label: stri
 export function TicketModal({ path, onClose }: { path: string; onClose: () => void }) {
   const fm = useWorkspace((s) => s.files[path]?.frontmatter);
   const ext = useMemo(() => wikiLinks((t) => openLink(t).catch(console.error)), []);
+  const [editing, setEditing] = useState(false); // body opens as preview
   if (!fm) return null;
   const priority = typeof fm.priority === "string" ? fm.priority : "";
   return (
@@ -67,10 +71,20 @@ export function TicketModal({ path, onClose }: { path: string; onClose: () => vo
             ))}
           </select>
         </label>
-        <Text path={path} field="assignee" label="Assignee" />
+        <Text path={path} field="assignee" label="Assignee" className="flex-1" />
+      </div>
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        Body
+        <Button variant="ghost" size="xs" onClick={() => setEditing((e) => !e)}>
+          {editing ? "Preview" : "Edit"}
+        </Button>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
-        <MarkdownEditor path={path} bodyOnly extensions={[ext]} />
+        {editing ? (
+          <MarkdownEditor path={path} bodyOnly extensions={[ext]} />
+        ) : (
+          <MarkdownPreview path={path} onLink={(t) => openLink(t).catch(console.error)} />
+        )}
       </div>
     </Dialog>
   );
