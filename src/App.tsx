@@ -17,14 +17,14 @@ const VIEWS: { id: View; label: string; Icon: LucideIcon }[] = [
 
 export default function App() {
   const { root, files, openFolder, restoreLast } = useWorkspace();
-  const { view, setView } = useUi();
+  const { view, setView, focus } = useUi();
   useEffect(() => {
     restoreLast().catch(console.warn);
   }, [restoreLast]);
 
   return (
     <div className="flex h-screen">
-      <nav className="flex w-14 flex-col items-center gap-2 border-r py-2">
+      {!focus && <nav className="flex w-14 flex-col items-center gap-2 border-r py-2">
         {VIEWS.map(({ id, label, Icon }) => (
           <Button
             key={id}
@@ -38,8 +38,8 @@ export default function App() {
             <Icon />
           </Button>
         ))}
-      </nav>
-      <aside className="flex min-h-0 w-64 flex-col gap-2 border-r p-3">
+      </nav>}
+      {!focus && <aside className="flex min-h-0 w-64 flex-col gap-2 border-r p-3">
         <Button onClick={() => openFolder().catch(console.error)}>Open folder</Button>
         {root && (
           <p className="text-xs text-muted-foreground">
@@ -48,7 +48,7 @@ export default function App() {
         )}
         {view === "docs" && <DocsSidebar />}
         {view === "files" && <FileTree />}
-      </aside>
+      </aside>}
       <main className="flex min-w-0 flex-1 flex-col">
         {view === "docs" ? (
           <DocsMain />

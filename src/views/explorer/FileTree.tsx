@@ -60,6 +60,17 @@ export function FileTree() {
     }
   };
 
+  const promote = async (path: string, dir: "docsDir" | "ticketsDir") => {
+    const { moveFile, config } = useWorkspace.getState();
+    setError(null);
+    try {
+      await moveFile(path, `${config[dir]}/${path.split("/").pop()}`);
+      if (useUi.getState().current === path) useUi.setState({ current: null });
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
   const row = (n: TreeNode, depth: number) => {
     const folder = !!n.children;
     const open = !closed.has(n.path);
@@ -115,6 +126,12 @@ export function FileTree() {
                       }
                     >
                       Rename
+                    </ContextMenu.Item>
+                    <ContextMenu.Item className={itemCls} onClick={() => void promote(n.path, "docsDir")}>
+                      Move to Docs
+                    </ContextMenu.Item>
+                    <ContextMenu.Item className={itemCls} onClick={() => void promote(n.path, "ticketsDir")}>
+                      Move to Tickets
                     </ContextMenu.Item>
                     <ContextMenu.Item className={itemCls} onClick={() => void remove(n.path)}>
                       Delete
