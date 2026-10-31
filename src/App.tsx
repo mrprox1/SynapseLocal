@@ -13,6 +13,7 @@ import {
   Sun,
   type LucideIcon,
 } from "lucide-react";
+import { CommandPalette } from "@/components/CommandPalette";
 import { Button } from "@/components/ui/button";
 import { useUi, type View } from "@/store/ui";
 import { useWorkspace } from "@/store/workspace";
@@ -134,6 +135,7 @@ export default function App() {
           <ExplorerMain />
         )}
       </main>
+      <CommandPalette />
     </div>
   );
 }
