@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { ask } from "@tauri-apps/plugin-dialog";
 import {
   closestCorners,
   DndContext,
@@ -12,7 +13,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { matchesFilter, placeCard, sortCards, STATUSES, subtasks, ticketOrder, ticketStatus, type Status } from "@/lib/board";
+import { archivePath, isArchived, matchesFilter, restorePath, placeCard, sortCards, STATUSES, subtasks, ticketOrder, ticketStatus, type Status } from "@/lib/board";
 import { setFrontmatterKey } from "@/lib/frontmatter";
 import { useUi } from "@/store/ui";
 import { useWorkspace } from "@/store/workspace";
@@ -35,6 +36,8 @@ export function Board() {
   const files = useWorkspace((s) => s.files);
   const current = useUi((s) => s.current);
   const filter = useUi((s) => s.boardFilter);
+  const showArchived = useUi((s) => s.showArchived);
+  const ticketsDir = useWorkspace((s) => s.config.ticketsDir);
   const [pending, setPending] = useState<Pending>({}); // optimistic moves until the write lands
   const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState<string | null>(null);
@@ -61,18 +64,19 @@ export function Board() {
             order: ticketOrder(f.frontmatter),
             priority: typeof p === "string" ? p : undefined,
             assignee: a == null ? undefined : String(a),
+            archived: isArchived(f.path, ticketsDir),
             ...subtasks(f.body),
           };
           return { ...card, ...pending[f.path] };
         }),
-    [files, pending],
+    [files, pending, ticketsDir],
   );
   const cols = useMemo(
     () =>
       Object.fromEntries(
-        STATUSES.map((s) => [s.id, sortCards(cards.filter((c) => c.status === s.id && matchesFilter(c, filter)))]),
+        STATUSES.map((s) => [s.id, sortCards(cards.filter((c) => c.status === s.id && (showArchived || !c.archived) && matchesFilter(c, filter)))]),
       ) as Record<Status, Card[]>,
-    [cards, filter],
+    [cards, filter, showArchived],
   );
 
   const onDragEnd = async ({ active, over }: DragEndEvent) => {
@@ -128,6 +132,28 @@ export function Board() {
     }
   };
 
+  /** Move tickets to/from the archive folder; clashes are skipped and reported. */
+  const relocate = async (paths: string[], target: (p: string) => string) => {
+    setError(null);
+    const failed: string[] = [];
+    for (const p of paths) {
+      try {
+        await useWorkspace.getState().moveFile(p, target(p));
+      } catch (e) {
+        failed.push(String(e));
+      }
+    }
+    if (failed.length) setError(`Could not move: ${failed.join("; ")}`);
+  };
+  const archive = (paths: string[]) => relocate(paths, (p) => archivePath(p, ticketsDir));
+  const restore = (path: string) => relocate([path], (p) => restorePath(p, ticketsDir));
+  const archiveAll = async () => {
+    const paths = cols.done.filter((c) => !c.archived).map((c) => c.path);
+    const n = paths.length;
+    if (n && (await ask(`Archive ${n} done ticket${n > 1 ? "s" : ""}?`, { title: "Archive", kind: "warning" })))
+      await archive(paths);
+  };
+
   const add = async (status: Status, title: string) => {
     try {
       useUi.getState().openPath(await useWorkspace.getState().createTicket(title, status));
@@ -146,7 +172,7 @@ export function Board() {
           {error}
         </div>
       )}
-      <FilterBar cards={cards} />
+      <FilterBar cards={cards.filter((c) => !c.archived)} />
       <DndContext
         sensors={sensors}
         collisionDetection={collision}
@@ -163,12 +189,22 @@ export function Board() {
               cards={cols[s.id]}
               onOpen={(p) => useUi.getState().openPath(p)}
               onAdd={(t) => void add(s.id, t)}
+              onArchive={s.id === "done" ? (p) => void archive([p]) : undefined}
+              onArchiveAll={s.id === "done" ? () => void archiveAll() : undefined}
             />
           ))}
         </div>
         <DragOverlay>{dragging && <CardFace card={dragging} className="shadow-lg" />}</DragOverlay>
       </DndContext>
-      {open && <TicketModal key={open} path={open} onClose={() => useUi.setState({ current: null })} />}
+      {open && (
+        <TicketModal
+          key={open}
+          path={open}
+          onClose={() => useUi.setState({ current: null })}
+          onArchive={() => void archive([open])}
+          onRestore={() => void restore(open)}
+        />
+      )}
     </div>
   );
 }

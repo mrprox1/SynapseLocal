@@ -6,18 +6,20 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import "katex/dist/katex.min.css";
 import "highlight.js/styles/github.css";
+import { isArchived, linkLabel } from "@/lib/board";
+import { resolveLink } from "@/lib/markdown";
 import { useWorkspace } from "@/store/workspace";
 
 const SKIP = /(^(```|~~~)[\s\S]*?(?:^\2.*$|(?![\s\S]))|`[^`\n]*`)/gm;
 const WIKI = /\[\[([^\][|]+)(?:\|([^\]]*))?\]\]/g;
 
 /** `[[x|y]]` → `[y](wiki:x)`, leaving fenced blocks and inline code untouched. */
-export const wikiToLinks = (md: string) =>
+export const wikiToLinks = (md: string, isArchivedTarget?: (target: string) => boolean) =>
   md
     .split(SKIP)
     .map((part, i) =>
       i % 3 === 0
-        ? part.replace(WIKI, (_, t: string, label?: string) => `[${label || t}](wiki:${encodeURIComponent(t.trim())})`)
+        ? part.replace(WIKI, (_, t: string, label?: string) => `[${label || linkLabel(t, !!isArchivedTarget?.(t))}](wiki:${encodeURIComponent(t.trim())})`)
         : i % 3 === 1
           ? part
           : "", // capture group 2 (fence marker) — not text
@@ -43,6 +45,8 @@ export function MarkdownPreview({
 }) {
   const body = useWorkspace((s) => s.files[path]?.body ?? "");
   const root = useWorkspace((s) => s.root);
+  const files = useWorkspace((s) => s.files);
+  const ticketsDir = useWorkspace((s) => s.config.ticketsDir);
   return (
     <div className="prose-preview h-full overflow-auto p-6">
       <Markdown
@@ -74,7 +78,10 @@ export function MarkdownPreview({
             ),
         }}
       >
-        {wikiToLinks(body)}
+        {wikiToLinks(body, (t) => {
+          const hit = resolveLink(t, Object.values(files));
+          return !!hit && isArchived(hit.path, ticketsDir);
+        })}
       </Markdown>
     </div>
   );

@@ -49,6 +49,9 @@
 }
 
 :root {
+    --git-M: #895503;
+    --git-A: #587c0c;
+    --git-D: #ad0707;
     --background: oklch(1 0 0);
     --foreground: oklch(0.145 0 0);
     --card: oklch(1 0 0);
@@ -84,6 +87,9 @@
 }
 
 .dark {
+    --git-M: #e2c08d;
+    --git-A: #73c991;
+    --git-D: #c74e39;
     --background: oklch(0.145 0 0);
     --foreground: oklch(0.985 0 0);
     --card: oklch(0.205 0 0);

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { buildTree, type TreeNode } from "@/lib/tree";
 import { sanitizeName } from "@/lib/workspace";
 import { cn } from "@/lib/utils";
+import { GitLabel } from "@/views/git/GitLabel";
 import { useUi } from "@/store/ui";
 import { useWorkspace } from "@/store/workspace";
 
@@ -98,7 +99,7 @@ export function FileTree() {
             }
           >
             {folder && (open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />)}
-            {n.name}
+            <GitLabel path={n.path} folder={folder}>{n.name}</GitLabel>
           </ContextMenu.Trigger>
           <ContextMenu.Portal>
             <ContextMenu.Positioner>

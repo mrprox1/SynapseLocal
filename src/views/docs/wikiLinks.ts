@@ -1,6 +1,7 @@
 import { autocompletion, type CompletionContext } from "@codemirror/autocomplete";
 import type { Extension, Range } from "@codemirror/state";
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from "@codemirror/view";
+import { isArchived, linkLabel } from "@/lib/board";
 import { resolveLink } from "@/lib/markdown";
 import { useWorkspace } from "@/store/workspace";
 
@@ -12,15 +13,17 @@ const targets = () => Object.values(useWorkspace.getState().files);
 function complete(ctx: CompletionContext) {
   const m = ctx.matchBefore(/\[\[[^\]\n]*/);
   if (!m) return null;
-  const names = new Set<string>();
-  for (const f of targets()) {
-    names.add(f.title);
-    names.add(f.path.split("/").pop()!.replace(/\.md$/i, ""));
+  const { files, config } = useWorkspace.getState();
+  const names = new Map<string, boolean>(); // name → archived
+  for (const f of Object.values(files)) {
+    const a = isArchived(f.path, config.ticketsDir);
+    for (const n of [f.title, f.path.split("/").pop()!.replace(/\.md$/i, "")]) names.set(n, a && names.get(n) !== false);
   }
   return {
     from: m.from + 2,
-    options: [...names].sort().map((label) => ({
+    options: [...names].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([label, archived]) => ({
       label,
+      displayLabel: linkLabel(label, archived),
       // bracket auto-close may already have typed the `]]`
       apply: (view: EditorView, _: unknown, from: number, to: number) => {
         const insert = view.state.sliceDoc(to, to + 2) === "]]" ? label : label + "]]";

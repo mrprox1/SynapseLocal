@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { useUi } from "@/store/ui";
 import { useWorkspace } from "@/store/workspace";
 import { ask } from "@tauri-apps/plugin-dialog";
+import { GitLabel } from "../git/GitLabel";
 import { Backlinks } from "./Backlinks";
 import { GraphView } from "./GraphView";
 import { wikiLinks } from "./wikiLinks";
@@ -65,7 +66,7 @@ export function DocsSidebar() {
             }
           >
             {n.children && (open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />)}
-            {n.children ? n.name : title(n.path)}
+            <GitLabel path={path} folder={!!n.children}>{n.children ? n.name : title(n.path)}</GitLabel>
           </button>
           {n.children && open && <ul>{rows(n.children, depth + 1)}</ul>}
         </li>

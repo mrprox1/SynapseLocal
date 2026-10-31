@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matchesFilter, placeCard, slugify, sortCards, subtasks, ticketStatus, uniquePath } from "./board";
+import { archivePath, isArchived, matchesFilter, restorePath, placeCard, slugify, sortCards, subtasks, ticketStatus, uniquePath } from "./board";
 
 describe("board", () => {
   it("status is strict, default backlog", () => {
@@ -44,5 +44,17 @@ describe("board", () => {
     expect(matchesFilter({ priority: "low", assignee: "ann" }, f)).toBe(false);
     expect(matchesFilter({ priority: "high", assignee: "bob" }, f)).toBe(false);
     expect(matchesFilter({ priority: "high" }, { priorities: [], assignee: "__none" })).toBe(true);
+  });
+});
+
+describe("archive", () => {
+  it("is detected by location only", () => {
+    expect(isArchived("tickets/archive/x.md", "tickets")).toBe(true);
+    expect(isArchived("tickets/x.md", "tickets")).toBe(false);
+    expect(isArchived("tickets/archive-notes/x.md", "tickets")).toBe(false);
+  });
+  it("moves keep the filename", () => {
+    expect(archivePath("tickets/x.md", "tickets")).toBe("tickets/archive/x.md");
+    expect(restorePath("tickets/archive/x.md", "tickets")).toBe("tickets/x.md");
   });
 });

@@ -72,3 +72,13 @@ export const NO_FILTER: Filter = { priorities: [], assignee: "" };
 export const matchesFilter = (c: { priority?: string; assignee?: string }, f: Filter) =>
   (!f.priorities.length || f.priorities.includes(c.priority ?? "none")) &&
   (!f.assignee || (f.assignee === UNASSIGNED ? !c.assignee : c.assignee === f.assignee));
+
+const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
+
+/** Tickets are archived by location: anywhere under `<ticketsDir>/archive/`. */
+export const isArchived = (path: string, ticketsDir: string) => path.startsWith(`${ticketsDir}/archive/`);
+export const archivePath = (path: string, ticketsDir: string) => `${ticketsDir}/archive/${baseName(path)}`;
+export const restorePath = (path: string, ticketsDir: string) => `${ticketsDir}/${baseName(path)}`;
+
+/** Label shown for a link to `path`. */
+export const linkLabel = (label: string, archived: boolean) => (archived ? `Archive: ${label}` : label);

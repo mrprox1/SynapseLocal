@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { MarkdownEditor } from "@/components/MarkdownEditor";
 import { MarkdownPreview } from "@/components/MarkdownPreview";
-import { PRIORITIES, STATUSES, ticketStatus } from "@/lib/board";
+import { isArchived, PRIORITIES, STATUSES, ticketStatus } from "@/lib/board";
 import { removeFrontmatterKey, setFrontmatterKey } from "@/lib/frontmatter";
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/store/workspace";
@@ -40,7 +40,18 @@ function Text({ path, field, label, className }: { path: string; field: string; 
   );
 }
 
-export function TicketModal({ path, onClose }: { path: string; onClose: () => void }) {
+export function TicketModal({
+  path,
+  onClose,
+  onArchive,
+  onRestore,
+}: {
+  path: string;
+  onClose: () => void;
+  onArchive: () => void;
+  onRestore: () => void;
+}) {
+  const archived = useWorkspace((s) => isArchived(path, s.config.ticketsDir));
   const fm = useWorkspace((s) => s.files[path]?.frontmatter);
   const ext = useMemo(() => wikiLinks((t) => openLink(t).catch(console.error)), []);
   const [editing, setEditing] = useState(false); // body opens as preview
@@ -72,6 +83,11 @@ export function TicketModal({ path, onClose }: { path: string; onClose: () => vo
           </select>
         </label>
         <Text path={path} field="assignee" label="Assignee" className="flex-1" />
+        {(archived || ticketStatus(fm) === "done") && (
+          <Button variant="outline" size="sm" className="self-end" onClick={archived ? onRestore : onArchive}>
+            {archived ? "Restore" : "Archive"}
+          </Button>
+        )}
       </div>
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         Body

@@ -4,6 +4,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { exists, mkdir, readDir, rename, readTextFile, watch, writeTextFile, type UnwatchFn } from "@tauri-apps/plugin-fs";
 import { load } from "@tauri-apps/plugin-store";
 import { parseMarkdown, resolveLink, rewriteLinks, type ParsedMarkdown } from "@/lib/markdown";
+import { parseStatus, type GitStatus } from "@/lib/git";
 import { slugify, uniquePath } from "@/lib/board";
 import { setFrontmatterKey } from "@/lib/frontmatter";
 import { categorize, DEFAULT_CONFIG, parseConfig, sanitizeName, type Category, type Config } from "@/lib/workspace";
@@ -14,6 +15,10 @@ type State = {
   root: string | null;
   config: Config;
   files: Record<string, FileEntry>;
+  /** Uncommitted changes; null when the workspace isn't in a git repo. */
+  git: GitStatus | null;
+  /** `git add -A` + commit just `paths` (workspace-relative); rejects with git's message. */
+  commitAll: (message: string, paths: string[]) => Promise<void>;
   openFolder: () => Promise<void>;
   restoreLast: () => Promise<void>;
   writeFile: (path: string, content: string) => Promise<void>;
@@ -78,6 +83,17 @@ export const useWorkspace = create<State>((set, get) => {
       }),
     );
     set({ root, config, files });
+    await refreshGit(root);
+  }
+
+  async function refreshGit(root: string) {
+    try {
+      const r = await invoke<[string, string] | null>("git_status", { root });
+      if (get().root === root) set({ git: r && parseStatus(r[0], r[1]) });
+    } catch (e) {
+      console.warn(e);
+      set({ git: null });
+    }
   }
 
   async function startWatch(root: string) {
@@ -101,6 +117,12 @@ export const useWorkspace = create<State>((set, get) => {
     root: null,
     config: DEFAULT_CONFIG,
     files: {},
+    git: null,
+    async commitAll(message, paths) {
+      const root = get().root!;
+      await invoke("git_commit", { root, message, paths });
+      await refreshGit(root); // the watcher ignores .git
+    },
     async openFolder() {
       const dir = await open({ directory: true });
       if (typeof dir !== "string") return;

@@ -1,3 +1,4 @@
+import { Archive } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Status } from "@/lib/board";
@@ -10,6 +11,7 @@ export type Card = {
   order?: number;
   priority?: string;
   assignee?: string;
+  archived: boolean;
   done: number;
   total: number;
 };
@@ -22,7 +24,7 @@ const PRIORITY_CLASS: Record<string, string> = {
 
 export function CardFace({ card, className }: { card: Card; className?: string }) {
   return (
-    <div className={cn("rounded-lg border bg-card p-2 text-sm shadow-xs", className)}>
+    <div className={cn("rounded-lg border bg-card p-2 text-sm shadow-xs", card.archived && "opacity-60", className)}>
       <div className="font-medium">{card.title}</div>
       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         {card.priority && (
@@ -39,13 +41,21 @@ export function CardFace({ card, className }: { card: Card; className?: string }
   );
 }
 
-export function TicketCard({ card, onOpen }: { card: Card; onOpen: (path: string) => void }) {
+export function TicketCard({
+  card,
+  onOpen,
+  onArchive,
+}: {
+  card: Card;
+  onOpen: (path: string) => void;
+  onArchive?: (path: string) => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.path });
   return (
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn("cursor-grab touch-none", isDragging && "opacity-40")}
+      className={cn("group relative cursor-grab touch-none", isDragging && "opacity-40")}
       {...attributes}
       {...listeners}
       onClick={() => onOpen(card.path)}
@@ -55,6 +65,22 @@ export function TicketCard({ card, onOpen }: { card: Card; onOpen: (path: string
       }}
     >
       <CardFace card={card} />
+      {onArchive && (
+        <button
+          title="Archive"
+          aria-label="Archive"
+          className="absolute top-1 right-1 hidden rounded p-1 text-muted-foreground hover:bg-accent group-hover:block focus-visible:block"
+          // keep the card's drag and open handlers out of it
+          onPointerDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onArchive(card.path);
+          }}
+        >
+          <Archive className="size-3.5" />
+        </button>
+      )}
     </div>
   );
 }

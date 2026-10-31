@@ -1,10 +1,12 @@
 import { useMemo } from "react";
+import { isArchived, linkLabel } from "@/lib/board";
 import { resolveLink } from "@/lib/markdown";
 import { useUi } from "@/store/ui";
 import { useWorkspace } from "@/store/workspace";
 
 export function Backlinks({ path }: { path: string }) {
   const files = useWorkspace((s) => s.files);
+  const ticketsDir = useWorkspace((s) => s.config.ticketsDir);
   const openPath = useUi((s) => s.openPath);
 
   // shortcut: full scan on every change, build an inverted index if workspaces get big
@@ -26,7 +28,7 @@ export function Backlinks({ path }: { path: string }) {
       {hits.length === 0 && <p className="text-muted-foreground">No backlinks</p>}
       {hits.map(({ f, line }) => (
         <button key={f.path} className="block w-full rounded px-2 py-1 text-left hover:bg-accent" onClick={() => openPath(f.path)}>
-          <span>{f.title}</span>
+          <span>{linkLabel(f.title, isArchived(f.path, ticketsDir))}</span>
           <span className="block truncate text-xs text-muted-foreground">{line}</span>
         </button>
       ))}

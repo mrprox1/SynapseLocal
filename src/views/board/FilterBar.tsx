@@ -13,6 +13,7 @@ export function FilterBar({ cards }: { cards: Card[] }) {
       ...filter,
       priorities: filter.priorities.includes(p) ? filter.priorities.filter((x) => x !== p) : [...filter.priorities, p],
     });
+  const showArchived = useUi((s) => s.showArchived);
   const active = filter.priorities.length > 0 || filter.assignee !== "";
   return (
     <div className="flex items-center gap-2 border-b px-3 py-1 text-sm">
@@ -40,6 +41,15 @@ export function FilterBar({ cards }: { cards: Card[] }) {
           <option key={a}>{a}</option>
         ))}
       </select>
+      <Button
+        size="xs"
+        variant="outline"
+        aria-pressed={showArchived}
+        className={cn("ml-auto", showArchived && "bg-accent")}
+        onClick={() => useUi.setState({ showArchived: !showArchived })}
+      >
+        Show archived
+      </Button>
       {active && (
         <Button size="xs" variant="ghost" onClick={() => setFilter(NO_FILTER)}>
           Clear filters

@@ -12,7 +12,7 @@ Built with Tauri 2, React, TypeScript and CodeMirror 6.
 
 ## Getting started
 
-Prerequisites: [Node.js](https://nodejs.org/) and the [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/) (Rust, plus WebView2 on Windows).
+Prerequisites: [Node.js](https://nodejs.org/) and the [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/) (Rust, plus WebView2 on Windows, or the Xcode Command Line Tools on macOS: `xcode-select --install`).
 
 ```sh
 npm install
@@ -22,6 +22,25 @@ npm test              # unit tests (Vitest)
 ```
 
 Click **Open folder** and pick a project folder. The app reopens the last folder on launch.
+
+### macOS
+
+Requires macOS 13 or later. Build on a Mac; you can't build a macOS app from Windows. To get one `.dmg` that runs on both Apple Silicon and Intel:
+
+```sh
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
+npm run tauri build -- --target universal-apple-darwin
+```
+
+The `.dmg` ends up in `src-tauri/target/universal-apple-darwin/release/bundle/dmg/`.
+
+The app isn't notarized by Apple. If a copy was downloaded or copied over from another Mac, macOS blocks the first launch. Right-click the app and choose **Open**, or allow it under **System Settings → Privacy & Security → Open Anyway**. If neither works:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/SynapseLocal.app
+```
+
+Where a shortcut below says **Ctrl/Cmd**, use **Cmd** on a Mac. Ctrl+click there is a right-click.
 
 ## How files are sorted
 
@@ -43,9 +62,9 @@ To use different folders, add `.synapse.json` to the project root:
 
 ## Docs
 
-- Type `[[` to get suggestions from existing docs. **Ctrl+click** a link to open it. A link to a missing doc is shown dashed, and Ctrl+clicking it creates the doc.
+- Type `[[` to get suggestions from existing docs. **Ctrl/Cmd+click** a link to open it. A link to a missing doc is shown dashed, and Ctrl/Cmd+clicking it creates the doc.
 - A link `[[Name]]` matches a file by its name (ignoring case, without `.md`), and falls back to the doc's title. Use `[[Name|label]]` to show different text.
-- **Ctrl+E** switches between the editor and the preview. The preview renders tables, task lists, `$math$`, code highlighting and images relative to the file.
+- **Ctrl/Cmd+E** switches between the editor and the preview. The preview renders tables, task lists, `$math$`, code highlighting and images relative to the file.
 - The backlinks panel lists every file that links to the open doc, with the line around the link.
 - **Graph** shows all docs and the links between them. Click a node to open that doc.
 - **Rename** renames the file and offers to update the links that point to it.
