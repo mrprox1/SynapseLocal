@@ -63,3 +63,12 @@ export function uniquePath(dir: string, slug: string, taken: Iterable<string>) {
   for (let i = 2; have.has(p.toLowerCase()); i++) p = `${dir}/${slug}-${i}.md`;
   return p;
 }
+
+export const UNASSIGNED = "__none";
+export type Filter = { priorities: string[]; assignee: string }; // assignee "" = anyone
+export const NO_FILTER: Filter = { priorities: [], assignee: "" };
+
+/** Empty priorities = all; missing priority counts as "none". */
+export const matchesFilter = (c: { priority?: string; assignee?: string }, f: Filter) =>
+  (!f.priorities.length || f.priorities.includes(c.priority ?? "none")) &&
+  (!f.assignee || (f.assignee === UNASSIGNED ? !c.assignee : c.assignee === f.assignee));

@@ -10,10 +10,11 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { placeCard, sortCards, STATUSES, subtasks, ticketOrder, ticketStatus, type Status } from "@/lib/board";
+import { matchesFilter, placeCard, sortCards, STATUSES, subtasks, ticketOrder, ticketStatus, type Status } from "@/lib/board";
 import { setFrontmatterKey } from "@/lib/frontmatter";
 import { useUi } from "@/store/ui";
 import { useWorkspace } from "@/store/workspace";
+import { FilterBar } from "./FilterBar";
 import { Column } from "./Column";
 import { TicketModal } from "./TicketModal";
 import { CardFace, type Card } from "./TicketCard";
@@ -23,6 +24,7 @@ type Pending = Record<string, { status: Status; order: number }>;
 export function Board() {
   const files = useWorkspace((s) => s.files);
   const current = useUi((s) => s.current);
+  const filter = useUi((s) => s.boardFilter);
   const [pending, setPending] = useState<Pending>({}); // optimistic moves until the write lands
   const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState<string | null>(null);
@@ -53,11 +55,10 @@ export function Board() {
   );
   const cols = useMemo(
     () =>
-      Object.fromEntries(STATUSES.map((s) => [s.id, sortCards(cards.filter((c) => c.status === s.id))])) as Record<
-        Status,
-        Card[]
-      >,
-    [cards],
+      Object.fromEntries(
+        STATUSES.map((s) => [s.id, sortCards(cards.filter((c) => c.status === s.id && matchesFilter(c, filter)))]),
+      ) as Record<Status, Card[]>,
+    [cards, filter],
   );
 
   const onDragEnd = async ({ active, over }: DragEndEvent) => {
@@ -125,6 +126,7 @@ export function Board() {
           {error}
         </div>
       )}
+      <FilterBar cards={cards} />
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}

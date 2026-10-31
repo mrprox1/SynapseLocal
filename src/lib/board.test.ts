@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { placeCard, slugify, sortCards, subtasks, ticketStatus, uniquePath } from "./board";
+import { matchesFilter, placeCard, slugify, sortCards, subtasks, ticketStatus, uniquePath } from "./board";
 
 describe("board", () => {
   it("status is strict, default backlog", () => {
@@ -35,5 +35,14 @@ describe("board", () => {
     expect(slugify("???")).toBe("ticket");
     expect(uniquePath("t", "a", ["t/a.md", "t/a-2.md"])).toBe("t/a-3.md");
     expect(uniquePath("t", "a", [])).toBe("t/a.md");
+  });
+
+  it("filters combine with AND", () => {
+    const f = { priorities: ["high", "none"], assignee: "ann" };
+    expect(matchesFilter({ priority: "high", assignee: "ann" }, f)).toBe(true);
+    expect(matchesFilter({ assignee: "ann" }, f)).toBe(true);
+    expect(matchesFilter({ priority: "low", assignee: "ann" }, f)).toBe(false);
+    expect(matchesFilter({ priority: "high", assignee: "bob" }, f)).toBe(false);
+    expect(matchesFilter({ priority: "high" }, { priorities: [], assignee: "__none" })).toBe(true);
   });
 });
