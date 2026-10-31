@@ -6,6 +6,8 @@ import { useWorkspace } from "@/store/workspace";
 import { cn } from "@/lib/utils";
 import { Board } from "@/views/board/Board";
 import { DocsMain, DocsSidebar } from "@/views/docs/DocsView";
+import { ExplorerMain } from "@/views/explorer/ExplorerMain";
+import { FileTree } from "@/views/explorer/FileTree";
 
 const VIEWS: { id: View; label: string; Icon: LucideIcon }[] = [
   { id: "docs", label: "Docs", Icon: FileText },
@@ -45,6 +47,7 @@ export default function App() {
           </p>
         )}
         {view === "docs" && <DocsSidebar />}
+        {view === "files" && <FileTree />}
       </aside>
       <main className="flex min-w-0 flex-1 flex-col">
         {view === "docs" ? (
@@ -52,9 +55,7 @@ export default function App() {
         ) : view === "board" ? (
           <Board />
         ) : (
-          <div className="flex flex-1 items-center justify-center text-muted-foreground">
-            {view} view — coming soon
-          </div>
+          <ExplorerMain />
         )}
       </main>
     </div>

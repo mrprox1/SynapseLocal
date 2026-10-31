@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { exists, mkdir, readDir, rename, readTextFile, watch, writeTextFile, type UnwatchFn } from "@tauri-apps/plugin-fs";
 import { load } from "@tauri-apps/plugin-store";
@@ -20,6 +21,12 @@ type State = {
   createDoc: (name: string) => Promise<string>;
   /** Create `<ticketsDir>/<slug>.md` with title and status; returns its path. */
   createTicket: (title: string, status: string) => Promise<string>;
+  /** Create `path` (with parent folders) unless it exists; throws if it does. */
+  createFile: (path: string, content?: string) => Promise<void>;
+  /** Rename/move a file; refuses if the target exists. Returns the new path. */
+  moveFile: (path: string, newPath: string) => Promise<string>;
+  /** Send a file to the OS trash. */
+  trashFile: (path: string) => Promise<void>;
   /**
    * Rename a doc in place. If other files link to it, `confirm(links, files)` decides
    * whether their `[[links]]` are rewritten. Returns the new path.
@@ -152,6 +159,32 @@ export const useWorkspace = create<State>((set, get) => {
       });
       if (doUpdate) for (const u of updates) await get().writeFile(u.f.path, u.content);
       return newPath;
+    },
+    async createFile(path, content = "") {
+      const { root, files } = get();
+      if (Object.keys(files).some((p) => p.toLowerCase() === path.toLowerCase())) throw new Error(`${path} already exists`);
+      await mkdir(`${root}/${path.split("/").slice(0, -1).join("/")}`, { recursive: true });
+      await get().writeFile(path, content);
+    },
+    async moveFile(path, newPath) {
+      const { root, files, config } = get();
+      if (newPath === path) return path;
+      if (Object.keys(files).some((p) => p.toLowerCase() === newPath.toLowerCase() && p !== path))
+        throw new Error(`${newPath} already exists`);
+      await mkdir(`${root}/${newPath.split("/").slice(0, -1).join("/")}`, { recursive: true });
+      await rename(`${root}/${path}`, `${root}/${newPath}`);
+      set((s) => {
+        const { [path]: old, ...rest } = s.files;
+        return { files: { ...rest, [newPath]: entry(newPath, old.content, config) } };
+      });
+      return newPath;
+    },
+    async trashFile(path) {
+      await invoke("move_to_trash", { root: get().root, rel: path });
+      set((s) => {
+        const { [path]: _, ...rest } = s.files;
+        return { files: rest };
+      });
     },
     async writeFile(path, content) {
       const { root, config } = get();
