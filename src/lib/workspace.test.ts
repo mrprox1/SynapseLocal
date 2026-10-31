@@ -18,6 +18,14 @@ describe("categorize", () => {
     expect(categorize("docs/a.md", c)).toBe("other");
     expect(categorize("wikipedia/a.md", c)).toBe("other");
   });
+  it("nested folder wins", () => {
+    const n = parseConfig('{"ticketsDir":"docs/tasks"}');
+    expect(categorize("docs/tasks/t.md", n)).toBe("ticket");
+    expect(categorize("docs/a.md", n)).toBe("doc");
+    const r = parseConfig('{"docsDir":"tickets/notes"}');
+    expect(categorize("tickets/notes/a.md", r)).toBe("doc");
+    expect(categorize("tickets/t.md", r)).toBe("ticket");
+  });
 });
 
 describe("sanitizeName", () => {

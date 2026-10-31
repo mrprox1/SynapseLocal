@@ -20,11 +20,12 @@ export function parseConfig(text: string | null): Config {
   }
 }
 
-/** `rel` is root-relative with forward slashes. */
+/** `rel` is root-relative with forward slashes. When one folder is inside the other (e.g. `docs/tasks`), the deeper one wins. */
 export function categorize(rel: string, c: Config): Category {
-  if (rel.startsWith(c.docsDir + "/")) return "doc";
-  if (rel.startsWith(c.ticketsDir + "/")) return "ticket";
-  return "other";
+  const inDocs = rel.startsWith(c.docsDir + "/");
+  const inTickets = rel.startsWith(c.ticketsDir + "/");
+  if (inDocs && inTickets) return c.ticketsDir.length > c.docsDir.length ? "ticket" : "doc";
+  return inDocs ? "doc" : inTickets ? "ticket" : "other";
 }
 
 /** Strip characters that are illegal in Windows filenames (and path separators). */

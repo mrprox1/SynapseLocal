@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { FileText, FolderOpen, KanbanSquare, type LucideIcon } from "lucide-react";
+import { FileText, FolderInput, FolderOpen, KanbanSquare, PanelLeftClose, PanelLeftOpen, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUi, type View } from "@/store/ui";
 import { useWorkspace } from "@/store/workspace";
@@ -17,8 +17,10 @@ const VIEWS: { id: View; label: string; Icon: LucideIcon }[] = [
 
 export default function App() {
   const { root, files, openFolder, restoreLast } = useWorkspace();
-  const { view, setView } = useUi();
+  const { view, setView, sidebar } = useUi();
   const focus = useUi((s) => s.focus) && view === "files"; // only the Explorer has an exit for it
+  const hasSidebar = view !== "board"; // the board has nothing to list
+  const open = () => openFolder().catch(console.error);
   useEffect(() => {
     restoreLast().catch(console.warn);
   }, [restoreLast]);
@@ -39,19 +41,36 @@ export default function App() {
             <Icon />
           </Button>
         ))}
-      </nav>}
-      {!focus && <aside className="flex min-h-0 w-64 flex-col gap-2 border-r p-3">
-        <Button onClick={() => openFolder().catch(console.error)}>Open folder</Button>
-        {root && (
-          <p className="text-xs text-muted-foreground">
-            {root}: {Object.keys(files).length} files
-          </p>
+        <div className="flex-1" />
+        {root && hasSidebar && (
+          <Button
+            variant="ghost"
+            size="icon"
+            title={sidebar ? "Hide sidebar" : "Show sidebar"}
+            aria-label={sidebar ? "Hide sidebar" : "Show sidebar"}
+            onClick={() => useUi.setState({ sidebar: !sidebar })}
+          >
+            {sidebar ? <PanelLeftClose /> : <PanelLeftOpen />}
+          </Button>
         )}
+        <Button variant="ghost" size="icon" title="Open folder…" aria-label="Open folder" onClick={open}>
+          <FolderInput />
+        </Button>
+      </nav>}
+      {!focus && root && hasSidebar && sidebar && <aside className="flex min-h-0 w-64 flex-col gap-2 border-r p-3">
+        <div className="min-w-0 text-xs text-muted-foreground" title={root}>
+          <div className="truncate font-medium text-foreground">{root.split("/").pop()}</div>
+          {Object.keys(files).length} files
+        </div>
         {view === "docs" && <DocsSidebar />}
         {view === "files" && <FileTree />}
       </aside>}
       <main className="flex min-w-0 flex-1 flex-col">
-        {view === "docs" ? (
+        {!root ? (
+          <div className="flex flex-1 items-center justify-center">
+            <Button onClick={open}>Open folder</Button>
+          </div>
+        ) : view === "docs" ? (
           <DocsMain />
         ) : view === "board" ? (
           <Board />

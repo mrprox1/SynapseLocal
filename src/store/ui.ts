@@ -8,6 +8,7 @@ type Ui = {
   view: View;
   current: string | null; // path of the file open in the editor
   focus: boolean; // Explorer focus mode
+  sidebar: boolean; // sidebar expanded (Docs / Files)
   boardFilter: Filter; // session-only
   setBoardFilter: (f: Filter) => void;
   setView: (v: View) => void;
@@ -19,6 +20,7 @@ export const useUi = create<Ui>((set) => ({
   view: "docs",
   current: null,
   focus: false,
+  sidebar: true,
   boardFilter: NO_FILTER,
   setBoardFilter: (boardFilter) => set({ boardFilter }),
   setView: (view) => set({ view }),
