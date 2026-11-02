@@ -1,7 +1,7 @@
 import { create } from "zustand";
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { exists, mkdir, readDir, rename, readTextFile, watch, writeTextFile, type UnwatchFn } from "@tauri-apps/plugin-fs";
+import { exists, mkdir, rename, readTextFile, watch, writeTextFile, type UnwatchFn } from "@tauri-apps/plugin-fs";
 import { load } from "@tauri-apps/plugin-store";
 import { parseMarkdown, resolveLink, rewriteLinks, type ParsedMarkdown } from "@/lib/markdown";
 import { parseStatus, type GitStatus } from "@/lib/git";
@@ -16,6 +16,8 @@ type State = {
   error: string | null;
   config: Config;
   files: Record<string, FileEntry>;
+  /** True while a newly opened folder is still being read; `files` is partial until then. */
+  loading: boolean;
   /** Uncommitted changes; null when the workspace isn't in a git repo. */
   git: GitStatus | null;
   /** `git add -A` + commit just `paths` (workspace-relative); rejects with git's message. */
@@ -48,21 +50,9 @@ let unwatch: UnwatchFn | null = null;
 let active = ""; // root being opened/shown; the old watcher's pending rescan must not bring its root back
 let gen = 0; // latest index() run; older runs finishing late are dropped
 const norm = (p: string) => p.split("\\").join("/");
-const SKIP =(name: string) => name.startsWith(".") || name === "node_modules";
 const settings = () => load("settings.json");
 /** Fs access is granted per workspace by the Rust side; must run before touching `dir`. */
 const allowWorkspace = (dir: string) => invoke("allow_workspace", { path: dir });
-
-async function walk(root: string, rel: string, out: string[]) {
-  const subdirs: Promise<void>[] = [];
-  for (const e of await readDir(rel ? `${root}/${rel}` : root)) {
-    if (SKIP(e.name)) continue;
-    const p = rel ? `${rel}/${e.name}` : e.name;
-    if (e.isDirectory) subdirs.push(walk(root, p, out));
-    else if (e.isFile && /\.md$/i.test(e.name)) out.push(p);
-  }
-  await Promise.all(subdirs);
-}
 
 export const useWorkspace = create<State>((set, get) => {
   const entry = (path: string, content: string, config: Config): FileEntry => ({
@@ -77,29 +67,44 @@ export const useWorkspace = create<State>((set, get) => {
     const g = ++gen;
     const cfgPath = `${root}/.synapse.json`;
     const config = parseConfig((await exists(cfgPath)) ? await readTextFile(cfgPath) : null);
-    const paths: string[] = [];
-    await walk(root, "", paths);
-    const prev = get().root === root ? get().files : {};
+    // a new root shows up at once and fills in as batches arrive; a rescan swaps once at the end
+    const fresh = get().root !== root;
+    if (fresh) set({ root, config, files: {}, git: null, loading: true });
+    const prev = fresh ? {} : get().files;
     const sameConfig = get().config === config || JSON.stringify(get().config) === JSON.stringify(config);
     const files: Record<string, FileEntry> = {};
-    await Promise.all(
-      paths.map(async (p) => {
-        const content = await readTextFile(`${root}/${p}`);
-        // keep the old entry when nothing changed so subscribers don't re-render
-        const old = prev[p];
-        files[p] = old && sameConfig && old.content === content ? old : entry(p, content, config);
-      }),
-    );
+    let received = 0;
+    let wake: (() => void) | undefined;
+    const channel = new Channel<[string, string][]>();
+    channel.onmessage = (batch) => {
+      received += batch.length;
+      if (g === gen) {
+        const parsed: Record<string, FileEntry> = {};
+        for (const [p, content] of batch) {
+          // keep the old entry when nothing changed so subscribers don't re-render
+          const old = prev[p];
+          parsed[p] = old && sameConfig && old.content === content ? old : entry(p, content, config);
+        }
+        if (fresh) set((s) => ({ files: { ...parsed, ...s.files } })); // files written meanwhile are newer
+        else Object.assign(files, parsed);
+      }
+      wake?.();
+    };
+    const total = await invoke<number>("index_workspace", { root, skip: config.skip, onBatch: channel });
+    // the invoke can resolve before the last channel messages are handled
+    while (received < total) await new Promise<void>((r) => (wake = r));
     if (g !== gen) return;
-    set((s) => {
-      if (s.root !== root) return { root, config, files };
-      // files the app wrote/moved/trashed while we were reading: the store is newer than disk was
-      for (const p of new Set([...Object.keys(s.files), ...Object.keys(prev)]))
-        if (s.files[p] === prev[p]) continue;
-        else if (s.files[p]) files[p] = s.files[p];
-        else delete files[p];
-      return { root, config, files };
-    });
+    if (fresh) set({ loading: false });
+    else
+      set((s) => {
+        if (s.root !== root) return { root, config, files };
+        // files the app wrote/moved/trashed while we were reading: the store is newer than disk was
+        for (const p of new Set([...Object.keys(s.files), ...Object.keys(prev)]))
+          if (s.files[p] === prev[p]) continue;
+          else if (s.files[p]) files[p] = s.files[p];
+          else delete files[p];
+        return { root, config, files };
+      });
     await refreshGit(root);
   }
 
@@ -115,7 +120,8 @@ export const useWorkspace = create<State>((set, get) => {
 
   /** Apply watcher changes: re-read only changed docs when that's enough, else a full index(). */
   async function refresh(root: string, paths: string[]) {
-    const actions = paths.map(watchAction);
+    const skip = get().config.skip;
+    const actions = paths.map((p) => watchAction(p, skip));
     if (actions.includes("index")) return index(root);
     const docs = paths.filter((_, i) => actions[i] === "doc");
     let contents: string[];
@@ -147,7 +153,7 @@ export const useWorkspace = create<State>((set, get) => {
         if (typeof e.type === "object" && "access" in e.type) return; // reads aren't changes
         for (const p of e.paths) {
           const rel = norm(p).slice(root.length + 1);
-          if (watchAction(rel) !== "ignore") changed.add(rel);
+          if (watchAction(rel, get().config.skip) !== "ignore") changed.add(rel);
         }
         if (!changed.size) return;
         clearTimeout(timer);
@@ -166,6 +172,7 @@ export const useWorkspace = create<State>((set, get) => {
     error: null,
     config: DEFAULT_CONFIG,
     files: {},
+    loading: false,
     git: null,
     async commitAll(message, paths) {
       const root = get().root!;
@@ -216,6 +223,7 @@ export const useWorkspace = create<State>((set, get) => {
       // case-insensitive: on Windows `readme.md` would overwrite an existing `README.md`
       const hit = Object.keys(files).find((p) => p.toLowerCase() === path.toLowerCase());
       if (hit) return hit;
+      if (get().loading && (await exists(`${root}/${path}`))) return path; // not indexed yet
       await mkdir(`${root}/${config.docsDir}`, { recursive: true });
       await get().writeFile(path, `# ${clean}\n`);
       return path;
@@ -224,13 +232,17 @@ export const useWorkspace = create<State>((set, get) => {
       const { root, config, files } = get();
       const t = title.trim();
       if (!t) throw new Error("empty title");
-      const path = uniquePath(config.ticketsDir, slugify(t), Object.keys(files));
+      let path = uniquePath(config.ticketsDir, slugify(t), Object.keys(files));
+      // while loading, `files` misses unloaded tickets: take the first name the disk doesn't have
+      for (let n = 2; get().loading && (await exists(`${root}/${path}`)); n++)
+        path = uniquePath(config.ticketsDir, `${slugify(t)}-${n}`, Object.keys(files));
       await mkdir(`${root}/${config.ticketsDir}`, { recursive: true });
       await get().writeFile(path, setFrontmatterKey(setFrontmatterKey("", "title", t), "status", status));
       return path;
     },
     async renameDoc(path, name, confirm) {
       const { root, files, config } = get();
+      if (get().loading) throw new Error("Still loading the workspace");
       const clean = sanitizeName(name);
       if (!clean) throw new Error("empty name");
       const newPath = `${path.split("/").slice(0, -1).concat(`${clean}.md`).join("/")}`;

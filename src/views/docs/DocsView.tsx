@@ -108,6 +108,7 @@ export function DocsSidebar() {
 
 export function DocsMain() {
   const current = useUi((s) => s.current);
+  const loading = useWorkspace((s) => s.loading);
   const exists = useWorkspace((s) => current != null && s.files[current]?.category === "doc");
   const [preview, setPreview] = useState(false);
   const graph = useUi((s) => s.graph);
@@ -143,8 +144,8 @@ export function DocsMain() {
         </Button>
         {!graph &&
           (renaming === null ? (
-            <Button variant="ghost" size="sm" onClick={() => setRenaming(current!.split("/").pop()!.replace(/\.md$/i, ""))}
-              title="Rename file"
+            <Button variant="ghost" size="sm" disabled={loading} onClick={() => setRenaming(current!.split("/").pop()!.replace(/\.md$/i, ""))}
+              title={loading ? "Loading…" : "Rename file"}
             >
               Rename
             </Button>

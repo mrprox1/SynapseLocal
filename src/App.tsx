@@ -47,7 +47,7 @@ const VIEWS: { id: View; label: string; Icon: LucideIcon }[] = [
 ];
 
 export default function App() {
-  const { root, files, error, openFolder, restoreLast } = useWorkspace();
+  const { root, files, loading, error, openFolder, restoreLast } = useWorkspace();
   const { view, setView, sidebar, chat } = useUi();
   const focus = useUi((s) => s.focus) && view === "files"; // only the Explorer has an exit for it
   const hasSidebar = view !== "board" && view !== "settings"; // these have nothing to list
@@ -144,7 +144,7 @@ export default function App() {
       {!focus && root && hasSidebar && sidebar && <aside className="flex min-h-0 w-64 flex-col gap-2 border-r p-3">
         <div className="min-w-0 text-xs text-muted-foreground" title={root}>
           <div className="truncate font-medium text-foreground">{root.split("/").pop()}</div>
-          {Object.keys(files).length} files
+          {loading ? "Loading… " : ""}{Object.keys(files).length} files
         </div>
         {view === "docs" && <DocsSidebar />}
         <Suspense>

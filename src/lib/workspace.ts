@@ -1,9 +1,9 @@
 import { cleanTicketFields, DEFAULT_TICKET_FIELDS, type TicketField } from "./tickets";
 
-export type Config = { docsDir: string; ticketsDir: string; dueSoonDays: number; ticketFields: TicketField[] };
+export type Config = { docsDir: string; ticketsDir: string; dueSoonDays: number; ticketFields: TicketField[]; skip: string[] };
 export type Category = "doc" | "ticket" | "other";
 
-export const DEFAULT_CONFIG: Config = { docsDir: "docs", ticketsDir: "tickets", dueSoonDays: 2, ticketFields: DEFAULT_TICKET_FIELDS };
+export const DEFAULT_CONFIG: Config = { docsDir: "docs", ticketsDir: "tickets", dueSoonDays: 2, ticketFields: DEFAULT_TICKET_FIELDS, skip: ["node_modules"] };
 
 /** Invalid JSON or non-string keys fall back to defaults. */
 export function parseConfig(text: string | null): Config {
@@ -17,6 +17,7 @@ export function parseConfig(text: string | null): Config {
       ticketsDir: dir(j?.ticketsDir, DEFAULT_CONFIG.ticketsDir),
       dueSoonDays: Number.isInteger(j?.dueSoonDays) && j.dueSoonDays >= 0 ? j.dueSoonDays : DEFAULT_CONFIG.dueSoonDays,
       ticketFields: cleanTicketFields(j?.ticketFields) ?? DEFAULT_TICKET_FIELDS,
+      skip: Array.isArray(j?.skip) ? cleanSkip(j.skip) : DEFAULT_CONFIG.skip,
     };
   } catch {
     console.warn(".synapse.json is not valid JSON; using defaults");
@@ -25,6 +26,10 @@ export function parseConfig(text: string | null): Config {
 }
 
 const clean = (v: string) => v.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+
+/** Trimmed, forward-slash entries; drops empty ones and anything with `..`. */
+export const cleanSkip = (v: unknown[]) =>
+  [...new Set(v.flatMap((e) => (typeof e === "string" ? [clean(e)] : [])).filter((e) => e && !e.split("/").includes("..")))];
 
 /** Error message for a folder setting, or null if fine. `other` is the sibling setting it must differ from. */
 export function validateDir(value: string, other: string): string | null {
@@ -58,11 +63,11 @@ export const sanitizeName = (name: string) => name.replace(/[\\/:*?"<>|]/g, "").
 /**
  * What a watcher change to `rel` (workspace-relative) needs: nothing (`.git` / `node_modules`
  * noise), a git refresh (other dot-paths, which the index skips), a re-read of just that doc,
- * or a full rescan (folders, config, anything else).
+ * or a full rescan (folders, config, anything else). `skip` is the config list: a name matches anywhere, a path from the root.
  */
-export function watchAction(rel: string): "ignore" | "git" | "doc" | "index" {
+export function watchAction(rel: string, skip: string[] = DEFAULT_CONFIG.skip): "ignore" | "git" | "doc" | "index" {
   const segs = rel.split("/");
-  if (segs.some((s) => s === ".git" || s === "node_modules")) return "ignore";
+  if (segs.includes(".git") || skip.some((s) => (s.includes("/") ? rel === s || rel.startsWith(s + "/") : segs.includes(s)))) return "ignore";
   if (rel === ".synapse.json") return "index";
   if (segs.some((s) => s.startsWith("."))) return "git";
   return /\.md$/i.test(rel) ? "doc" : "index";

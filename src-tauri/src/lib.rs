@@ -2,6 +2,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Component, Path};
 use std::process::{Child, Stdio};
 use std::sync::Mutex;
+use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_fs::FsExt;
 
@@ -52,6 +53,55 @@ fn reveal_workspace(app: AppHandle, path: String) -> Result<(), String> {
     // explorer ignores forward-slash paths and opens Documents instead
     let path = if cfg!(windows) { path.replace('/', "\\") } else { path };
     std::process::Command::new(opener).arg(&path).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// Calls `emit(rel_path, content)` for every `.md` under `dir`. Dot-entries are always skipped;
+/// a `skip` entry without `/` matches that name anywhere, one with `/` matches that path from the root.
+/// `.gitignore` is not read: notes often live in gitignored folders on purpose.
+fn walk_md(dir: &Path, rel: &str, skip: &[String], emit: &mut impl FnMut(String, String)) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for e in entries.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        let path = if rel.is_empty() { name.clone() } else { format!("{rel}/{name}") };
+        if name.starts_with('.') || skip.iter().any(|s| *s == name || *s == path) {
+            continue;
+        }
+        let Ok(kind) = e.file_type() else { continue };
+        if kind.is_dir() {
+            walk_md(&e.path(), &path, skip, emit);
+        } else if kind.is_file() && name.to_lowercase().ends_with(".md") {
+            if let Ok(content) = std::fs::read_to_string(e.path()) {
+                emit(path, content);
+            }
+        }
+    }
+}
+
+/// Stream every `.md` file of an allowed workspace to `on_batch` (about every 100 ms or 500 files).
+/// Resolves with the number of files sent, so the caller knows when the channel has drained.
+#[tauri::command]
+async fn index_workspace(app: AppHandle, root: String, skip: Vec<String>, on_batch: Channel<Vec<(String, String)>>) -> Result<usize, String> {
+    if !app.fs_scope().is_allowed(&root) {
+        return Err("path is outside the workspace".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let (mut batch, mut total, mut last) = (Vec::new(), 0, std::time::Instant::now());
+        let mut failed = None;
+        walk_md(Path::new(&root), "", &skip, &mut |p, c| {
+            batch.push((p, c));
+            total += 1;
+            if batch.len() >= 500 || last.elapsed() >= std::time::Duration::from_millis(100) {
+                failed = failed.take().or(on_batch.send(std::mem::take(&mut batch)).err());
+                last = std::time::Instant::now();
+            }
+        });
+        if !batch.is_empty() {
+            failed = failed.or(on_batch.send(batch).err());
+        }
+        failed.map_or(Ok(total), |e| Err(e.to_string()))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Run `git <args>` in `root` without flashing a console window on Windows.
@@ -246,7 +296,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![allow_workspace, move_to_trash, reveal_workspace, git_status, git_commit, git_diff, git_discard, claude_run, claude_stop])
+        .invoke_handler(tauri::generate_handler![allow_workspace, move_to_trash, reveal_workspace, index_workspace, git_status, git_commit, git_diff, git_discard, claude_run, claude_stop])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -273,5 +323,36 @@ mod tests {
         assert!(!app.fs_scope().is_allowed(root.parent().unwrap().join("outside.md")));
         #[cfg(unix)]
         assert!(!app.fs_scope().is_allowed(root.join(".private")));
+    }
+
+    #[test]
+    fn walk_finds_gitignored_notes_and_honours_skip_entries() {
+        let root = std::env::temp_dir().join(format!("synapse-walk-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        for (p, body) in [
+            ("a.md", "root"),
+            ("sub/b.MD", "sub"),
+            ("ignored/c.md", "gitignored"),
+            ("node_modules/d.md", "name skip"),
+            (".hidden/e.md", "dot dir"),
+            ("a/target/f.md", "path skip"),
+            ("b/target/g.md", "kept"),
+            ("sub/n.txt", "not markdown"),
+        ] {
+            let f = root.join(p);
+            std::fs::create_dir_all(f.parent().unwrap()).unwrap();
+            std::fs::write(f, body).unwrap();
+        }
+        std::fs::write(root.join(".gitignore"), "ignored/\n").unwrap();
+        let found = |skip: &[&str]| {
+            let skip: Vec<String> = skip.iter().map(|s| s.to_string()).collect();
+            let mut out = Vec::new();
+            walk_md(&root, "", &skip, &mut |p, _| out.push(p));
+            out.sort();
+            out
+        };
+        assert_eq!(found(&["node_modules", "a/target"]), ["a.md", "b/target/g.md", "ignored/c.md", "sub/b.MD"]);
+        assert_eq!(found(&["target", "ignored"]), ["a.md", "node_modules/d.md", "sub/b.MD"]);
+        std::fs::remove_dir_all(&root).unwrap();
     }
 }

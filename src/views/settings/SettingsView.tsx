@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ArrowDown, ArrowUp, Check, Copy, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cleanDir, relativeTo, validateDir } from "@/lib/workspace";
+import { cleanDir, cleanSkip, relativeTo, validateDir } from "@/lib/workspace";
 import { setThemeMode, useThemeMode, type ThemeMode } from "@/theme";
 import { useWorkspace } from "@/store/workspace";
 import { BUILTIN_KEYS, fieldKey, ticketTemplate, type TicketField } from "@/lib/tickets";
@@ -14,11 +14,13 @@ function FolderField({
   label,
   value,
   onChange,
+  onCommit,
   onError,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  onCommit: (v?: string) => void;
   onError: (e: string | null) => void;
 }) {
   const root = useWorkspace((s) => s.root)!;
@@ -26,7 +28,7 @@ function FolderField({
     const dir = await open({ directory: true, defaultPath: root });
     if (typeof dir !== "string") return;
     const rel = relativeTo(root, dir);
-    if (rel) onChange(rel);
+    if (rel) (onChange(rel), onCommit(rel));
     else onError("Folder must be inside the workspace");
   };
   return (
@@ -37,6 +39,7 @@ function FolderField({
           className="min-w-0 flex-1 rounded-md border bg-transparent px-2 py-1"
           value={value}
           onChange={(e) => (onError(null), onChange(e.target.value))}
+          onBlur={() => onCommit()}
         />
         <Button type="button" variant="outline" onClick={browse}>
           Browse…
@@ -77,8 +80,9 @@ export function SettingsView() {
   const [docs, setDocs] = useState(config.docsDir);
   const [tickets, setTickets] = useState(config.ticketsDir);
   const [soon, setSoon] = useState(String(config.dueSoonDays));
+  const [skip, setSkip] = useState(config.skip.join("\n"));
   const [err, setErr] = useState<string | null>(null);
-  const [layout, setLayout] = useState<"yaml" | "table">("yaml");
+  const [layout, setLayout] = useState<"yaml" | "table">("table");
   const [newLabel, setNewLabel] = useState("");
   const [renamed, setRenamed] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -115,22 +119,26 @@ export function SettingsView() {
     }
   };
 
-  const save = async () => {
-    const e = validateDir(docs, tickets) ?? validateDir(tickets, docs);
+  /** Saved on blur; `d` / `t` carry a value picked with Browse that state doesn't hold yet. */
+  const save = async (d = docs, t = tickets) => {
+    const e = validateDir(d, t) ?? validateDir(t, d);
     setErr(e);
     const n = Number(soon);
     if (!e && !(Number.isInteger(n) && n >= 0)) return setErr("Due soon must be a whole number of days");
     if (e) return;
-    await saveConfig({ docsDir: cleanDir(docs), ticketsDir: cleanDir(tickets), dueSoonDays: n, ticketFields: config.ticketFields }).catch((x) => setErr(String(x)));
+    const next = { ...config, docsDir: cleanDir(d), ticketsDir: cleanDir(t), dueSoonDays: n, skip: cleanSkip(skip.split("\n")) };
+    if (JSON.stringify(next) === JSON.stringify(config)) return;
+    await saveConfig(next).catch((x) => setErr(String(x)));
   };
 
   return (
-    <div className="flex max-w-xl flex-col gap-8 overflow-auto p-6">
+    <div className="grid min-h-0 w-full flex-1 content-start items-start gap-8 overflow-auto p-6 lg:grid-cols-2">
+      <div className="flex min-w-0 flex-col gap-8">
       {root && (
         <section className="flex flex-col gap-3">
           <h2 className="font-medium">Workspace</h2>
-          <FolderField label="Docs folder" value={docs} onChange={setDocs} onError={setErr} />
-          <FolderField label="Tickets folder" value={tickets} onChange={setTickets} onError={setErr} />
+          <FolderField label="Docs folder" value={docs} onChange={setDocs} onCommit={(v) => save(v)} onError={setErr} />
+          <FolderField label="Tickets folder" value={tickets} onChange={setTickets} onCommit={(v) => save(undefined, v)} onError={setErr} />
           <label className="flex flex-col gap-1 text-sm">
             Highlight tickets due within (days)
             <input
@@ -138,13 +146,22 @@ export function SettingsView() {
               min={0}
               className="w-24 rounded-md border bg-transparent px-2 py-1"
               value={soon}
+              onBlur={() => save()}
               onChange={(e) => (setErr(null), setSoon(e.target.value))}
             />
           </label>
+          <label className="flex flex-col gap-1 text-sm">
+            Skip when indexing (one per line)
+            <textarea
+              rows={3}
+              className="rounded-md border bg-transparent px-2 py-1 font-mono text-xs"
+              value={skip}
+              onBlur={() => save()}
+              onChange={(e) => setSkip(e.target.value)}
+            />
+            <span className="text-xs text-muted-foreground">A name (target) skips it anywhere; a path (src-tauri/target) skips only that folder. Hidden folders are always skipped.</span>
+          </label>
           {err && <p className="text-sm text-destructive">{err}</p>}
-          <div>
-            <Button onClick={save}>Save</Button>
-          </div>
           <div className="text-xs text-muted-foreground">
             <div className="break-all select-text">{root}</div>
             <Button
@@ -157,6 +174,17 @@ export function SettingsView() {
           </div>
         </section>
       )}
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">App</h2>
+        <div className="flex gap-2">
+          {MODES.map((m) => (
+            <Button key={m} variant={mode === m ? "default" : "outline"} className="capitalize" onClick={() => setThemeMode(m)}>
+              {m}
+            </Button>
+          ))}
+        </div>
+      </section>
+      </div>
       <section className="flex min-w-0 flex-col gap-3">
         <h2 className="font-medium">Ticket Header</h2>
         <div className="flex flex-col gap-2">
@@ -172,7 +200,7 @@ export function SettingsView() {
         </div>
         <div className="flex items-center justify-between gap-2">
           <div role="group" aria-label="Header layout" className="flex gap-2">
-            {(["yaml", "table"] as const).map((value) => (
+            {(["table", "yaml"] as const).map((value) => (
               <Button key={value} variant={layout === value ? "default" : "outline"} aria-pressed={layout === value} onClick={() => { setLayout(value); setCopied(false); setCopyError(null); }}>
                 {value === "yaml" ? "YAML" : "Markdown Table"}
               </Button>
@@ -185,16 +213,6 @@ export function SettingsView() {
         <textarea readOnly aria-label="Ticket header template" value={template} rows={18} className="w-full resize-y rounded-md border bg-background p-3 font-mono text-xs" />
         <span role="status" className="sr-only">{copied ? "Header copied" : ""}</span>
         {copyError && <p role="alert" className="text-sm text-destructive">{copyError}</p>}
-      </section>
-      <section className="flex flex-col gap-3">
-        <h2 className="font-medium">App</h2>
-        <div className="flex gap-2">
-          {MODES.map((m) => (
-            <Button key={m} variant={mode === m ? "default" : "outline"} className="capitalize" onClick={() => setThemeMode(m)}>
-              {m}
-            </Button>
-          ))}
-        </div>
       </section>
     </div>
   );

@@ -78,6 +78,28 @@ describe("parseConfig ticketFields", () => {
   });
 });
 
+describe("parseConfig skip", () => {
+  const f = (v: unknown) => parseConfig(JSON.stringify({ skip: v })).skip;
+  it("defaults when missing or not a list", () => {
+    expect(parseConfig(null).skip).toEqual(["node_modules"]);
+    expect(f("target")).toEqual(["node_modules"]);
+  });
+  it("cleans entries", () => {
+    expect(f([" target ", "src-tauri\\target/", "", "../up", "a/../b", 3, "target"])).toEqual(["target", "src-tauri/target"]);
+    expect(f([])).toEqual([]);
+  });
+});
+
+describe("watchAction with a custom skip list", () => {
+  it("ignores names anywhere and paths from the root", () => {
+    expect(watchAction("a/target/x.md", ["target"])).toBe("ignore");
+    expect(watchAction("src-tauri/target/x.md", ["src-tauri/target"])).toBe("ignore");
+    expect(watchAction("other/src-tauri/target/x.md", ["src-tauri/target"])).toBe("doc");
+    expect(watchAction("web/node_modules/x.md", ["target"])).toBe("doc");
+    expect(watchAction(".git/HEAD", [])).toBe("ignore");
+  });
+});
+
 describe("watchAction", () => {
   it("routes paths by what the index needs", () => {
     expect(watchAction(".git/index.lock")).toBe("ignore");
