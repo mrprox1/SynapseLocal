@@ -1,6 +1,53 @@
 import { describe, expect, it } from "vitest";
 import { parseMarkdown, resolveLink, rewriteLinks } from "./markdown";
-import { setTicketField, TICKET_TEMPLATES } from "./tickets";
+import { addLink, DEFAULT_TICKET_FIELDS, removeLink, setTicketField, ticketTemplate, type TicketField } from "./tickets";
+
+// the hard-coded templates from before they were generated
+const OLD_TEMPLATES = {
+  yaml: `---
+id: TASK-001
+title: Enable container image scanning
+summary: Scan every container image push
+status: backlog
+type: Infrastructure
+component: Container Security
+owner: ""
+reviewer: ""
+priority: high
+tshirt_size: S
+linked_documents:
+  - Secure SDLC Standard
+  - Vulnerability Management Policy
+compliance_driver: ISO 27001:2022 A.8.8
+---
+
+## Description
+
+`,
+  table: `# TASK-001: Enable container image scanning
+
+| Field | Details |
+| :--- | :--- |
+| **Ticket ID** | TASK-001 |
+| **Summary** | Scan every container image push |
+| **Status** | backlog |
+| **Type** | Infrastructure |
+| **Component** | Container Security |
+| **Owner** | |
+| **Reviewer** | |
+| **Priority** | High |
+| **T-shirt Size** | S |
+| **Linked Documents** | Secure SDLC Standard, Vulnerability Management Policy |
+| **Compliance Driver** | ISO 27001:2022 A.8.8 |
+
+---
+
+## Description
+
+`,
+};
+
+const TICKET_TEMPLATES = { yaml: ticketTemplate("yaml", DEFAULT_TICKET_FIELDS), table: ticketTemplate("table", DEFAULT_TICKET_FIELDS) };
 
 describe("parseMarkdown", () => {
   it("title: frontmatter > heading > filename", () => {
@@ -40,6 +87,35 @@ describe("parseMarkdown", () => {
     expect(result.title).toBe("Override");
     expect(result.frontmatter).toMatchObject({ id: "OPS-1", owner: "", assignee: "", priority: "low" });
     expect(result.body).toBe("");
+  });
+});
+
+describe("link list helpers", () => {
+  it("adds without duplicates and removes by index", () => {
+    expect(addLink(["A"], "B")).toEqual(["A", "B"]);
+    expect(addLink(["A"], "a")).toEqual(["A"]);
+    expect(removeLink(["A", "B", "C"], 1)).toEqual(["A", "C"]);
+  });
+});
+
+describe("configurable ticket fields", () => {
+  it("generates exactly the old templates for the default fields", () => {
+    expect(TICKET_TEMPLATES).toEqual(OLD_TEMPLATES);
+  });
+  const fields: TicketField[] = [{ key: "id", label: "Ticket ID" }, { key: "sprint", label: "Sprint" }, { key: "refs", label: "Refs", type: "links" }];
+  it.each(["yaml", "table"] as const)("round trips a custom text and links field in the %s layout", (layout) => {
+    let content = ticketTemplate(layout, fields);
+    expect(parseMarkdown("t.md", content, fields).frontmatter).toMatchObject({ id: "TASK-001", refs: ["Secure SDLC Standard", "Vulnerability Management Policy"] });
+    content = setTicketField(content, "sprint", "S7", fields);
+    content = setTicketField(content, "refs", "A, B", fields);
+    const r = parseMarkdown("t.md", content, fields);
+    expect(r.frontmatter).toMatchObject({ sprint: "S7", refs: ["A", "B"] });
+    expect(r.links).toEqual(["A", "B"]);
+  });
+  it("only reads configured fields", () => {
+    const table = "# A\n\n| Field | Details |\n| --- | --- |\n| Sprint | 3 |\n| Ticket ID | X |";
+    expect(parseMarkdown("t.md", table, fields).frontmatter.sprint).toBe("3");
+    expect(parseMarkdown("t.md", table).frontmatter.sprint).toBeUndefined();
   });
 });
 

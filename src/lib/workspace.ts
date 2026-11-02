@@ -1,7 +1,9 @@
-export type Config = { docsDir: string; ticketsDir: string; dueSoonDays: number };
+import { cleanTicketFields, DEFAULT_TICKET_FIELDS, type TicketField } from "./tickets";
+
+export type Config = { docsDir: string; ticketsDir: string; dueSoonDays: number; ticketFields: TicketField[] };
 export type Category = "doc" | "ticket" | "other";
 
-export const DEFAULT_CONFIG: Config = { docsDir: "docs", ticketsDir: "tickets", dueSoonDays: 2 };
+export const DEFAULT_CONFIG: Config = { docsDir: "docs", ticketsDir: "tickets", dueSoonDays: 2, ticketFields: DEFAULT_TICKET_FIELDS };
 
 /** Invalid JSON or non-string keys fall back to defaults. */
 export function parseConfig(text: string | null): Config {
@@ -14,6 +16,7 @@ export function parseConfig(text: string | null): Config {
       docsDir: dir(j?.docsDir, DEFAULT_CONFIG.docsDir),
       ticketsDir: dir(j?.ticketsDir, DEFAULT_CONFIG.ticketsDir),
       dueSoonDays: Number.isInteger(j?.dueSoonDays) && j.dueSoonDays >= 0 ? j.dueSoonDays : DEFAULT_CONFIG.dueSoonDays,
+      ticketFields: cleanTicketFields(j?.ticketFields) ?? DEFAULT_TICKET_FIELDS,
     };
   } catch {
     console.warn(".synapse.json is not valid JSON; using defaults");

@@ -1,5 +1,5 @@
 import { parse } from "yaml";
-import { normalizeTicketFields, ticketHeader } from "./tickets";
+import { DEFAULT_TICKET_FIELDS, normalizeTicketFields, ticketHeader, type TicketField } from "./tickets";
 
 export type ParsedMarkdown = {
   title: string;
@@ -13,7 +13,7 @@ const FENCE = /^(```|~~~)[\s\S]*?(?:^\1.*$|(?![\s\S]))/gm;
 const LINK = /\[\[([^\][|]+)(?:\|[^\]]*)?\]\]/g;
 const LINK_ALIAS = /\[\[([^\][|]+)(\|[^\]]*)?\]\]/g;
 
-export function parseMarkdown(path: string, content: string): ParsedMarkdown {
+export function parseMarkdown(path: string, content: string, ticketFields: TicketField[] = DEFAULT_TICKET_FIELDS): ParsedMarkdown {
   let frontmatter: Record<string, unknown> = {};
   let body = content;
   const m = FM.exec(content);
@@ -28,12 +28,12 @@ export function parseMarkdown(path: string, content: string): ParsedMarkdown {
   }
 
   const linkBody = body;
-  const header = ticketHeader(body);
+  const header = ticketHeader(body, ticketFields);
   if (header) {
     frontmatter = { ...header.fields, ...frontmatter };
     body = header.body;
   }
-  frontmatter = normalizeTicketFields(frontmatter);
+  frontmatter = normalizeTicketFields(frontmatter, ticketFields);
   const fmTitle = frontmatter.title;
   const heading = /^#[ \t]+(.+?)[ \t]*#*[ \t]*$/m.exec(body.replace(FENCE, ""))?.[1];
   const file = path.split(/[\\/]/).pop()!.replace(/\.md$/i, "");
@@ -42,8 +42,9 @@ export function parseMarkdown(path: string, content: string): ParsedMarkdown {
   const links = [...linkBody.replace(FENCE, "").matchAll(LINK)]
     .map((l) => l[1].trim())
     .filter(Boolean);
-  if (Array.isArray(frontmatter.linked_documents))
-    links.push(...frontmatter.linked_documents.filter((value): value is string => typeof value === "string").map((value) => value.replace(/^\[\[|\]\]$/g, "")));
+  for (const f of ticketFields)
+    if (f.type === "links" && Array.isArray(frontmatter[f.key]))
+      links.push(...(frontmatter[f.key] as unknown[]).filter((value): value is string => typeof value === "string").map((value) => value.replace(/^\[\[|\]\]$/g, "")));
   return { title, frontmatter, body, links: [...new Set(links)] };
 }
 

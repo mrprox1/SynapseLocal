@@ -69,7 +69,7 @@ export const useWorkspace = create<State>((set, get) => {
     path,
     content,
     category: categorize(path, config),
-    ...parseMarkdown(path, content),
+    ...parseMarkdown(path, content, config.ticketFields),
   });
 
   async function index(root: string) {
@@ -282,9 +282,9 @@ export const useWorkspace = create<State>((set, get) => {
         return { files: rest };
       });
     },
-    async saveConfig({ docsDir, ticketsDir, dueSoonDays }) {
+    async saveConfig(config) {
       const root = get().root!;
-      await writeTextFile(`${root}/.synapse.json`, JSON.stringify({ docsDir, ticketsDir, dueSoonDays }, null, 2) + "\n");
+      await writeTextFile(`${root}/.synapse.json`, JSON.stringify(config, null, 2) + "\n");
       await index(root); // don't wait for the watcher
     },
     async writeFile(path, content) {

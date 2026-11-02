@@ -63,6 +63,21 @@ describe("relativeTo", () => {
   });
 });
 
+describe("parseConfig ticketFields", () => {
+  const f = (v: unknown) => parseConfig(JSON.stringify({ ticketFields: v })).ticketFields;
+  it("defaults when missing or not a list", () => {
+    expect(f(undefined)).toEqual(DEFAULT_CONFIG.ticketFields);
+    expect(f("x")).toEqual(DEFAULT_CONFIG.ticketFields);
+  });
+  it("cleans entries", () => {
+    expect(f([{ label: "Risk Owner" }, { key: "x", label: "" }, { label: "Risk owner" }, { label: "Status" }, { key: "refs", label: "Refs", type: "links" }, 3])).toEqual([
+      { key: "risk_owner", label: "Risk Owner" },
+      { key: "refs", label: "Refs", type: "links" },
+    ]);
+    expect(f([])).toEqual([]);
+  });
+});
+
 describe("watchAction", () => {
   it("routes paths by what the index needs", () => {
     expect(watchAction(".git/index.lock")).toBe("ignore");

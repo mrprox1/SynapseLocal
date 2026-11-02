@@ -7,9 +7,11 @@ import { MarkdownBody, MarkdownPreview } from "@/components/MarkdownPreview";
 import { addComment, parseComments } from "@/lib/comments";
 import { isArchived, localDate, PRIORITIES, STATUS_TINT, STATUSES, ticketDue, ticketStatus } from "@/lib/board";
 
-import { setTicketField, TICKET_FIELDS } from "@/lib/tickets";
+import { fuzzyScore } from "@/lib/fuzzy";
+import { resolveLink } from "@/lib/markdown";
+import { addLink, removeLink, setTicketField } from "@/lib/tickets";
 import { cn } from "@/lib/utils";
-import { useWorkspace } from "@/store/workspace";
+import { useWorkspace, type FileEntry } from "@/store/workspace";
 import { openLink } from "@/views/docs/DocsView";
 import { wikiLinks } from "@/views/docs/wikiLinks";
 
@@ -19,8 +21,76 @@ const input = "rounded-md border bg-background px-2 py-1 text-sm font-normal";
 function put(path: string, key: string, value: string) {
   const { files, writeFile } = useWorkspace.getState();
   const c = files[path]?.content ?? "";
-  const next = setTicketField(c, key, value);
+  const next = setTicketField(c, key, value, useWorkspace.getState().config.ticketFields);
   if (next !== c) writeFile(path, next).catch(console.error);
+}
+
+const ORDER = { doc: 0, other: 1, ticket: 2 };
+const stemOf = (p: string) => p.split("/").pop()!.replace(/\.md$/i, "");
+
+/** Chips for the linked files of one `links` field plus a fuzzy add box that stays open between picks. */
+function LinkedDocs({ path, field, label }: { path: string; field: string; label: string }) {
+  const files = useWorkspace((s) => s.files);
+  const stored = useWorkspace((s) => s.files[path]?.frontmatter[field]);
+  const list = (Array.isArray(stored) ? stored : []).map(String);
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const [sel, setSel] = useState(0);
+  const all = useMemo(() => Object.values(files), [files]);
+  const resolved = list.map((l) => resolveLink(l.replace(/^\[\[|\]\]$/g, ""), all));
+  const linked = new Set(resolved.map((f) => f?.path));
+  const hits = all
+    .filter((f) => f.path !== path && !linked.has(f.path))
+    .map((f) => ({ f, s: q ? fuzzyScore(q, `${f.title} ${f.path}`) : 0 }))
+    .filter((x): x is { f: FileEntry; s: number } => x.s !== null)
+    .sort((a, b) => ORDER[a.f.category] - ORDER[b.f.category] || b.s - a.s || a.f.path.localeCompare(b.f.path))
+    .slice(0, 8);
+  const save = (next: string[]) => put(path, field, next.join(", "));
+  const add = (f: FileEntry) => { save(addLink(list, stemOf(f.path))); setQ(""); setSel(0); };
+  return (
+    <div className="relative flex flex-col gap-1 text-sm font-semibold text-muted-foreground">
+      {label}
+      <div className="flex flex-wrap gap-1">
+        {list.map((l, i) => (
+          <span key={i} title={resolved[i] ? resolved[i]!.path : `No file named ${l}`} className={cn("inline-flex max-w-full items-center gap-1 rounded-md border px-2 py-0.5 font-normal", !resolved[i] && "border-amber-500 text-amber-600 dark:text-amber-400")}>
+            <button type="button" className="min-w-0 truncate underline" onClick={() => openLink(l.replace(/^\[\[|\]\]$/g, "")).catch(console.error)}>{!resolved[i] && "⚠ "}{l}</button>
+            <button type="button" aria-label={`Remove ${l}`} onClick={() => save(removeLink(list, i))}><X className="size-3" /></button>
+          </span>
+        ))}
+      </div>
+      <input
+        className={cn(input, "min-w-0 w-full")}
+        placeholder="+ Link documents…"
+        value={q}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onChange={(e) => { setQ(e.target.value); setSel(0); setOpen(true); }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            setSel((v) => Math.max(0, Math.min(hits.length - 1, v + (e.key === "ArrowDown" ? 1 : -1))));
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            if (open && hits[sel]) add(hits[sel].f);
+          } else if (e.key === "Escape" && open) {
+            e.stopPropagation(); // don't close the ticket window
+            setOpen(false);
+          } else if (e.key === "Backspace" && !q && list.length) save(removeLink(list, list.length - 1));
+        }}
+      />
+      {open && hits.length > 0 && (
+        <ul role="listbox" className="absolute top-full z-10 mt-1 max-h-56 w-full overflow-auto rounded-md border bg-popover font-normal text-popover-foreground shadow-md">
+          {hits.map(({ f }, i) => (
+            // mousedown, not click: the input's blur would close the list first
+            <li key={f.path} role="option" aria-selected={i === sel} className={cn("cursor-pointer px-2 py-1", i === sel && "bg-accent")} onMouseDown={(e) => { e.preventDefault(); add(f); }}>
+              <div className="truncate">{f.title}</div>
+              <div className="truncate text-xs text-muted-foreground">{f.path}</div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 function Text({ path, field, label, className, big }: { path: string; field: string; label: string; className?: string; big?: boolean }) {
@@ -97,6 +167,7 @@ export function TicketModal({
   onArchive: () => void;
   onRestore: () => void;
 }) {
+  const ticketFields = useWorkspace((s) => s.config.ticketFields);
   const archived = useWorkspace((s) => isArchived(path, s.config.ticketsDir));
   const fm = useWorkspace((s) => s.files[path]?.frontmatter);
   const ext = useMemo(() => wikiLinks((t) => openLink(t).catch(console.error)), []);
@@ -161,19 +232,10 @@ export function TicketModal({
         <Text path={path} field="assignee" label="Assignee" className="min-w-0" />
       </div>
       <div className="mt-3 grid grid-cols-1 gap-3">
-        {TICKET_FIELDS.map(({ key, label }) => (
-          <Text key={key} path={path} field={key} label={label} className="min-w-0" />
-        ))}
+        {ticketFields.map(({ key, label, type }) =>
+          type === "links" ? <LinkedDocs key={key} path={path} field={key} label={label} /> : <Text key={key} path={path} field={key} label={label} className="min-w-0" />,
+        )}
       </div>
-      {Array.isArray(fm.linked_documents) && fm.linked_documents.length > 0 && (
-        <ul aria-label="Linked Documents" className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-          {fm.linked_documents.map((document, index) => (
-            <li key={index} className="min-w-0 max-w-full break-words">
-              <button className="text-blue-600 underline dark:text-blue-400" onClick={() => openLink(String(document)).catch(console.error)}>{String(document)}</button>
-            </li>
-          ))}
-        </ul>
-      )}
       </aside>
       <div className="min-h-64 min-w-0 flex-1 overflow-hidden rounded-md border md:min-h-0">
         {editing ? (
