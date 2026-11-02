@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Archive, ArchiveRestore, Eye, MessageSquare, Pencil } from "lucide-react";
+import { Archive, ArchiveRestore, Eye, MessageSquare, Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { MarkdownEditor, MarkdownInput } from "@/components/MarkdownEditor";
@@ -7,7 +7,7 @@ import { MarkdownBody, MarkdownPreview } from "@/components/MarkdownPreview";
 import { addComment, parseComments } from "@/lib/comments";
 import { isArchived, localDate, PRIORITIES, STATUS_TINT, STATUSES, ticketDue, ticketStatus } from "@/lib/board";
 
-import { removeFrontmatterKey, setFrontmatterKey } from "@/lib/frontmatter";
+import { setTicketField, TICKET_FIELDS } from "@/lib/tickets";
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/store/workspace";
 import { openLink } from "@/views/docs/DocsView";
@@ -19,14 +19,15 @@ const input = "rounded-md border bg-background px-2 py-1 text-sm font-normal";
 function put(path: string, key: string, value: string) {
   const { files, writeFile } = useWorkspace.getState();
   const c = files[path]?.content ?? "";
-  const next = value === "" ? removeFrontmatterKey(c, key) : setFrontmatterKey(c, key, value);
+  const next = setTicketField(c, key, value);
   if (next !== c) writeFile(path, next).catch(console.error);
 }
 
 function Text({ path, field, label, className, big }: { path: string; field: string; label: string; className?: string; big?: boolean }) {
   const stored = useWorkspace((s) => {
-    const v = s.files[path]?.frontmatter[field];
-    return v == null ? "" : String(v);
+    const file = s.files[path];
+    const v = field === "title" ? file?.title : file?.frontmatter[field];
+    return Array.isArray(v) ? v.join(", ") : v == null ? "" : String(v);
   });
   const [v, setV] = useState(stored);
   useEffect(() => setV(stored), [stored]); // picks up edits made on disk
@@ -34,7 +35,7 @@ function Text({ path, field, label, className, big }: { path: string; field: str
     <label className={cn("flex flex-col gap-1 text-sm font-semibold text-muted-foreground", className)}>
       {label}
       <input
-        className={cn(input, big && "px-2 py-1.5 text-xl font-bold")}
+        className={cn(input, "min-w-0 w-full", big && "px-2 py-1.5 text-xl font-bold")}
         value={v}
         onChange={(e) => setV(e.target.value)}
         onBlur={() => v.trim() !== stored && (field !== "title" || v.trim()) && put(path, field, v.trim())}
@@ -63,7 +64,7 @@ function Comments({ path }: { path: string }) {
     useWorkspace.getState().writeFile(path, addComment(latest, author.trim(), text, date)).then(() => setText(""), (e) => setErr(String(e)));
   };
   return (
-    <aside className="flex w-96 shrink-0 flex-col gap-2 border-l pl-4 text-sm">
+    <aside className="flex min-h-64 w-full shrink-0 flex-col gap-2 border-t pt-4 text-sm xl:min-h-0 xl:w-72 xl:border-t-0 xl:border-l xl:pt-0 xl:pl-4">
       <div className="text-sm font-semibold text-muted-foreground">Comments {comments.length > 0 && comments.length}</div>
       {comments.length > 0 && (
         <ul className="min-h-0 flex-1 divide-y divide-border overflow-auto">
@@ -114,11 +115,17 @@ export function TicketModal({
   if (!fm) return null;
   const priority = typeof fm.priority === "string" ? fm.priority : "";
   return (
-    <Dialog open onClose={onClose} title="Ticket" className="h-[80vh] w-[min(72rem,94vw)]">
-      <Text path={path} field="title" label="Title" big />
-      <div className="flex min-h-0 flex-1 gap-4">
-      <div className="flex min-w-0 flex-1 flex-col gap-3">
-      <div className="flex flex-wrap gap-3">
+    <Dialog open onClose={onClose} title="Ticket" className="h-[90vh] max-h-[92vh] w-[min(96rem,96vw)]">
+      <div className="flex shrink-0 items-start gap-3">
+        <Text path={path} field="title" label="Title" big className="min-w-0 flex-1" />
+        <Button type="button" variant="ghost" size="icon" title="Close ticket" aria-label="Close ticket" onClick={onClose}>
+          <X />
+        </Button>
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto xl:flex-row xl:overflow-hidden">
+      <div className="flex min-w-0 shrink-0 flex-col gap-4 md:min-h-96 md:flex-row xl:min-h-0 xl:flex-1 xl:shrink">
+      <aside aria-label="Ticket fields" className="max-h-[36vh] shrink-0 overflow-auto border-b pb-4 pr-1 md:max-h-none md:w-72 md:border-b-0 md:border-r md:pb-0 md:pr-4">
+      <div className="grid grid-cols-2 gap-3">
         <label className="flex flex-col gap-1 text-sm font-semibold text-muted-foreground">
           Status
           <select className={cn(input, STATUS_TINT[ticketStatus(fm)])} value={ticketStatus(fm)} onChange={(e) => put(path, "status", e.target.value)}>
@@ -146,14 +153,29 @@ export function TicketModal({
           <input
             key={ticketDue(fm)}
             type="date"
-            className={input}
+            className={cn(input, "min-w-0 w-full")}
             defaultValue={ticketDue(fm) ?? ""}
             onBlur={(e) => e.target.value !== (ticketDue(fm) ?? "") && put(path, "due_date", e.target.value)}
           />
         </label>
-        <Text path={path} field="assignee" label="Assignee" className="min-w-24 flex-1" />
+        <Text path={path} field="assignee" label="Assignee" className="min-w-0" />
       </div>
-      <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
+      <div className="mt-3 grid grid-cols-1 gap-3">
+        {TICKET_FIELDS.map(({ key, label }) => (
+          <Text key={key} path={path} field={key} label={label} className="min-w-0" />
+        ))}
+      </div>
+      {Array.isArray(fm.linked_documents) && fm.linked_documents.length > 0 && (
+        <ul aria-label="Linked Documents" className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+          {fm.linked_documents.map((document, index) => (
+            <li key={index} className="min-w-0 max-w-full break-words">
+              <button className="text-blue-600 underline dark:text-blue-400" onClick={() => openLink(String(document)).catch(console.error)}>{String(document)}</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      </aside>
+      <div className="min-h-64 min-w-0 flex-1 overflow-hidden rounded-md border md:min-h-0">
         {editing ? (
           <MarkdownEditor path={path} bodyOnly extensions={[ext]} />
         ) : (
@@ -161,7 +183,7 @@ export function TicketModal({
         )}
       </div>
       </div>
-      <div className="flex flex-col gap-2 pt-6">
+      <div className="flex shrink-0 gap-2 xl:flex-col">
         <Button
           variant={showComments ? "secondary" : "outline"}
           size="icon"

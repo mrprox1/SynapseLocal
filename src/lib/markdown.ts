@@ -1,4 +1,5 @@
 import { parse } from "yaml";
+import { normalizeTicketFields, ticketHeader } from "./tickets";
 
 export type ParsedMarkdown = {
   title: string;
@@ -26,14 +27,23 @@ export function parseMarkdown(path: string, content: string): ParsedMarkdown {
     }
   }
 
+  const linkBody = body;
+  const header = ticketHeader(body);
+  if (header) {
+    frontmatter = { ...header.fields, ...frontmatter };
+    body = header.body;
+  }
+  frontmatter = normalizeTicketFields(frontmatter);
   const fmTitle = frontmatter.title;
   const heading = /^#[ \t]+(.+?)[ \t]*#*[ \t]*$/m.exec(body.replace(FENCE, ""))?.[1];
   const file = path.split(/[\\/]/).pop()!.replace(/\.md$/i, "");
   const title = (typeof fmTitle === "string" && fmTitle.trim()) || heading || file;
 
-  const links = [...body.replace(FENCE, "").matchAll(LINK)]
+  const links = [...linkBody.replace(FENCE, "").matchAll(LINK)]
     .map((l) => l[1].trim())
     .filter(Boolean);
+  if (Array.isArray(frontmatter.linked_documents))
+    links.push(...frontmatter.linked_documents.filter((value): value is string => typeof value === "string").map((value) => value.replace(/^\[\[|\]\]$/g, "")));
   return { title, frontmatter, body, links: [...new Set(links)] };
 }
 

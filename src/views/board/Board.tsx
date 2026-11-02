@@ -15,6 +15,7 @@ import {
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { archivePath, groupArchived, localDate, isArchived, matchesFilter, restorePath, placeCard, sortCards, STATUSES, subtasks, ticketArchivedAt, ticketDue, ticketOrder, ticketStatus, type Status } from "@/lib/board";
 import { removeFrontmatterKey, setFrontmatterKey } from "@/lib/frontmatter";
+import { setTicketField } from "@/lib/tickets";
 import { useUi } from "@/store/ui";
 import { useWorkspace } from "@/store/workspace";
 import { FilterBar } from "./FilterBar";
@@ -60,6 +61,7 @@ export function Board() {
           const card: Card = {
             path: f.path,
             title: f.title,
+            id: f.frontmatter.id == null ? undefined : String(f.frontmatter.id),
             status: ticketStatus(f.frontmatter),
             order: ticketOrder(f.frontmatter),
             due: ticketDue(f.frontmatter),
@@ -121,7 +123,7 @@ export function Board() {
       const { writeFile } = useWorkspace.getState();
       for (const m of moves) {
         let c = useWorkspace.getState().files[m.path].content;
-        if (m.path === id && to !== card.status) c = setFrontmatterKey(c, "status", to);
+        if (m.path === id && to !== card.status) c = setTicketField(c, "status", to);
         await writeFile(m.path, setFrontmatterKey(c, "order", m.order));
       }
     } catch (e) {

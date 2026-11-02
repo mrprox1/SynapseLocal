@@ -39,9 +39,12 @@ Nothing is stored in a database. Every view reads and writes ordinary markdown f
   ```
 
   A missing or unknown status puts the card in **Backlog**.
+- Tickets in subfolders appear on the same board as tickets directly in the tickets folder. Archive and restore preserve their relative subfolder paths.
+- Headers support YAML frontmatter or an H1 followed by a `Field | Details` Markdown table. Ticket IDs are optional, arbitrary text (no required prefix). Both layouts support `id`, `summary`, `type`, `component`, `owner`, `reviewer`, `priority`, `tshirt_size`, `linked_documents` (a YAML list or comma-separated table values), and `compliance_driver`. Table labels use readable names such as **Ticket ID**, **T-shirt Size**, and **Linked Documents**. The older **Linked ISMS Documents** label is also accepted.
+- YAML values take precedence when both layouts are present. Owner is used as the board assignee unless an explicit assignee is set. Linked documents participate in backlinks and the graph.
 - Drag and drop between and within columns, mouse or keyboard. A drop changes only the `status` (and `order`) lines in the file. Other keys and comments stay exactly as they were.
 - Cards show priority, assignee and sub-task progress (`2/5`).
-- Ticket modal: edit title, status, priority, assignee and the body.
+- Ticket modal: edit title, status, priority, assignee, due date, and all header fields separately from the body. Linked documents are also shown as clickable links. Table field edits keep the table layout; fields without an existing row are saved in YAML.
 - A "+" button on each column creates a new ticket. A filter bar narrows cards by priority and assignee.
 - **Archive**: Done tickets can be archived one at a time, or all at once with "Archive all" (it respects the active filter). Archiving moves the file to `<ticketsDir>/archive/` without changing its content. Links to it keep working, and archived links show as `Archive: <name>`. "Show archived" displays them dimmed, with a **Restore** button.
 
@@ -70,6 +73,7 @@ Only shown when the workspace is inside a git repo and `git` is on PATH.
 - Login, model and billing come from your own Claude Code setup. The app stores no API keys.
 
 ### Settings
+- Copy either a YAML or Markdown-table ticket header template, with matching metadata fields and a Linked Documents list.
 - Change the docs and tickets folders (saved to `.synapse.json` in the workspace, so the setting travels with the project). Nested folders are allowed, e.g. `docs/tasks`, and the deeper folder wins.
 - Theme: System / Light / Dark.
 - Shows the workspace path, with "Reveal in Explorer".

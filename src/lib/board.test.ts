@@ -57,6 +57,11 @@ describe("archive", () => {
     expect(archivePath("tickets/x.md", "tickets")).toBe("tickets/archive/x.md");
     expect(restorePath("tickets/archive/x.md", "tickets")).toBe("tickets/x.md");
   });
+  it("archive and restore preserve subfolders and avoid duplicate filename collisions", () => {
+    expect(archivePath("tickets/security/aws/task.md", "tickets")).toBe("tickets/archive/security/aws/task.md");
+    expect(restorePath("tickets/archive/security/aws/task.md", "tickets")).toBe("tickets/security/aws/task.md");
+    expect(archivePath("tickets/a/task.md", "tickets")).not.toBe(archivePath("tickets/b/task.md", "tickets"));
+  });
 
   it("due dates", () => {
     expect(ticketDue({ due_date: "2026-06-01" })).toBe("2026-06-01");

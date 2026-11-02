@@ -18,6 +18,11 @@ describe("categorize", () => {
     expect(categorize("docs/a.md", c)).toBe("other");
     expect(categorize("wikipedia/a.md", c)).toBe("other");
   });
+  it("treats tickets in arbitrarily deep subfolders like root tickets", () => {
+    expect(categorize("tickets/security/aws/JIRA-032.md", c)).toBe("ticket");
+    expect(categorize("tickets/archive/security/JIRA-032.md", c)).toBe("ticket");
+    expect(categorize("tickets-other/security/JIRA-032.md", c)).toBe("other");
+  });
   it("nested folder wins", () => {
     const n = parseConfig('{"ticketsDir":"docs/tasks"}');
     expect(categorize("docs/tasks/t.md", n)).toBe("ticket");

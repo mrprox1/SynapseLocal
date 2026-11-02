@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
+import { Check, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cleanDir, relativeTo, validateDir } from "@/lib/workspace";
 import { setThemeMode, useThemeMode, type ThemeMode } from "@/theme";
 import { useWorkspace } from "@/store/workspace";
+import { TICKET_TEMPLATES } from "@/lib/tickets";
 
 const MODES: ThemeMode[] = ["system", "light", "dark"];
 
@@ -51,6 +53,19 @@ export function SettingsView() {
   const [tickets, setTickets] = useState(config.ticketsDir);
   const [soon, setSoon] = useState(String(config.dueSoonDays));
   const [err, setErr] = useState<string | null>(null);
+  const [layout, setLayout] = useState<keyof typeof TICKET_TEMPLATES>("yaml");
+  const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
+
+  const copyTemplate = async () => {
+    try {
+      await navigator.clipboard.writeText(TICKET_TEMPLATES[layout]);
+      setCopied(true);
+      setCopyError(null);
+    } catch {
+      setCopyError("Could not copy template");
+    }
+  };
 
   const save = async () => {
     const e = validateDir(docs, tickets) ?? validateDir(tickets, docs);
@@ -94,6 +109,24 @@ export function SettingsView() {
           </div>
         </section>
       )}
+      <section className="flex min-w-0 flex-col gap-3">
+        <h2 className="font-medium">Ticket Header</h2>
+        <div className="flex items-center justify-between gap-2">
+          <div role="group" aria-label="Header layout" className="flex gap-2">
+            {(["yaml", "table"] as const).map((value) => (
+              <Button key={value} variant={layout === value ? "default" : "outline"} aria-pressed={layout === value} onClick={() => { setLayout(value); setCopied(false); setCopyError(null); }}>
+                {value === "yaml" ? "YAML" : "Markdown Table"}
+              </Button>
+            ))}
+          </div>
+          <Button size="icon" variant="outline" title={copied ? "Copied" : "Copy header"} aria-label={copied ? "Copied" : "Copy header"} onClick={copyTemplate}>
+            {copied ? <Check /> : <Copy />}
+          </Button>
+        </div>
+        <textarea readOnly aria-label="Ticket header template" value={TICKET_TEMPLATES[layout]} rows={18} className="w-full resize-y rounded-md border bg-background p-3 font-mono text-xs" />
+        <span role="status" className="sr-only">{copied ? "Header copied" : ""}</span>
+        {copyError && <p role="alert" className="text-sm text-destructive">{copyError}</p>}
+      </section>
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">App</h2>
         <div className="flex gap-2">

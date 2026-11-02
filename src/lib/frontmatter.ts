@@ -1,3 +1,5 @@
+import { isNode, parseDocument } from "yaml";
+
 // Line-based edits of top-level frontmatter keys; everything else stays byte-identical.
 // shortcut: scalar values only, a key owning a nested block would leave its children behind.
 
@@ -10,13 +12,14 @@ const keyLine = (key: string, flags = "m") =>
 
 const SCALAR = /^\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[^#]*?)(\s+#.*)?\s*$/;
 
-function fmt(value: string | number) {
+function fmt(value: string | number | string[]) {
+  if (Array.isArray(value)) return JSON.stringify(value);
   if (typeof value === "number") return String(value);
   const s = value;
   return s === "" || /[:#]|^\s|\s$|^[-?[\]{}&*!|>'"%@`]|\n/.test(s) ? JSON.stringify(s) : s;
 }
 
-export function setFrontmatterKey(content: string, key: string, value: string | number): string {
+export function setFrontmatterKey(content: string, key: string, value: string | number | string[]): string {
   const eol = EOL.exec(content)?.[0] ?? "\n";
   const m = FM.exec(content);
   if (!m) return `---${eol}${key}: ${fmt(value)}${eol}---${eol}${content}`;
@@ -25,7 +28,11 @@ export function setFrontmatterKey(content: string, key: string, value: string | 
   const re = keyLine(key);
   let newBlock: string;
   if (re.test(block)) {
-    newBlock = block.replace(re, (line) => {
+    const node = Array.isArray(value) ? parseDocument(block).get(key, true) : undefined;
+    if (isNode(node) && node.range) {
+      const start = re.exec(block)!.index;
+      newBlock = block.slice(0, start) + `${key}: ${fmt(value)}${eol}` + block.slice(node.range[2]);
+    } else newBlock = block.replace(re, (line) => {
       const rest = line.slice(key.length + 1).replace(/\r?\n$/, "");
       const comment = SCALAR.exec(rest)?.[1] ?? "";
       return `${key}: ${fmt(value)}${comment}${line.slice(line.replace(/\r?\n$/, "").length)}`;
