@@ -8,11 +8,12 @@ use tauri_plugin_fs::FsExt;
 /// Grant the webview fs and asset-protocol access to `path` (recursively). Nothing else is allowed.
 // shortcut: workspaces opened earlier in the session stay allowed until restart; revoke on switch if that matters.
 #[tauri::command]
-fn allow_workspace(app: AppHandle, path: String) -> Result<(), String> {
+fn allow_workspace<R: tauri::Runtime>(app: AppHandle<R>, path: String) -> Result<(), String> {
     if !Path::new(&path).is_dir() {
         return Err(format!("{path} is not a folder"));
     }
     app.fs_scope().allow_directory(&path, true).map_err(|e| e.to_string())?;
+    app.fs_scope().allow_file(Path::new(&path).join(".synapse.json")).map_err(|e| e.to_string())?;
     app.asset_protocol_scope().allow_directory(&path, true).map_err(|e| e.to_string())
 }
 
@@ -248,4 +249,29 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![allow_workspace, move_to_trash, reveal_workspace, git_status, git_commit, git_diff, git_discard, claude_run, claude_stop])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn workspace_scope_allows_config_but_not_unrelated_dotfiles() {
+        let app = tauri::test::mock_builder()
+            .plugin(tauri_plugin_fs::init())
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .unwrap();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let config = root.join(".synapse.json");
+        assert!(!app.fs_scope().is_allowed(&config));
+
+        allow_workspace(app.handle().clone(), root.to_string_lossy().into_owned()).unwrap();
+
+        assert!(app.fs_scope().is_allowed(root));
+        assert!(app.fs_scope().is_allowed(root.join("docs/note.md")));
+        assert!(app.fs_scope().is_allowed(&config));
+        assert!(!app.fs_scope().is_allowed(root.parent().unwrap().join("outside.md")));
+        #[cfg(unix)]
+        assert!(!app.fs_scope().is_allowed(root.join(".private")));
+    }
 }

@@ -13,6 +13,7 @@ export type FileEntry = ParsedMarkdown & { path: string; category: Category; con
 
 type State = {
   root: string | null;
+  error: string | null;
   config: Config;
   files: Record<string, FileEntry>;
   /** Uncommitted changes; null when the workspace isn't in a git repo. */
@@ -162,6 +163,7 @@ export const useWorkspace = create<State>((set, get) => {
 
   return {
     root: null,
+    error: null,
     config: DEFAULT_CONFIG,
     files: {},
     git: null,
@@ -176,23 +178,34 @@ export const useWorkspace = create<State>((set, get) => {
       await refreshGit(root);
     },
     async openFolder() {
-      const dir = await open({ directory: true });
-      if (typeof dir !== "string") return;
-      await allowWorkspace(dir);
-      active = norm(dir);
-      await index(dir);
-      await startWatch(norm(dir));
-      const s = await settings();
-      await s.set("lastRoot", dir);
-      await s.save();
+      set({ error: null });
+      try {
+        const dir = await open({ directory: true });
+        if (typeof dir !== "string") return;
+        await allowWorkspace(dir);
+        active = norm(dir);
+        await index(dir);
+        await startWatch(norm(dir));
+        const s = await settings();
+        await s.set("lastRoot", dir);
+        await s.save();
+      } catch (error) {
+        set({ error: `Could not open folder: ${String(error)}` });
+        throw error;
+      }
     },
     async restoreLast() {
-      const last = await (await settings()).get<string>("lastRoot");
-      // rejects when the folder is gone
-      if (last && (await allowWorkspace(last).then(() => true, () => false))) {
-        active = norm(last);
-        await index(last);
-        await startWatch(norm(last));
+      try {
+        const last = await (await settings()).get<string>("lastRoot");
+        // rejects when the folder is gone
+        if (last && (await allowWorkspace(last).then(() => true, () => false))) {
+          active = norm(last);
+          await index(last);
+          await startWatch(norm(last));
+        }
+      } catch (error) {
+        set({ error: `Could not reopen folder: ${String(error)}` });
+        throw error;
       }
     },
     async createDoc(name) {

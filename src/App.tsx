@@ -47,7 +47,7 @@ const VIEWS: { id: View; label: string; Icon: LucideIcon }[] = [
 ];
 
 export default function App() {
-  const { root, files, openFolder, restoreLast } = useWorkspace();
+  const { root, files, error, openFolder, restoreLast } = useWorkspace();
   const { view, setView, sidebar, chat } = useUi();
   const focus = useUi((s) => s.focus) && view === "files"; // only the Explorer has an exit for it
   const hasSidebar = view !== "board" && view !== "settings"; // these have nothing to list
@@ -153,6 +153,7 @@ export default function App() {
         </Suspense>
       </aside>}
       <main className="flex min-w-0 flex-1 flex-col">
+        {error && <p role="alert" className="break-words border-b p-3 text-sm text-destructive">{error}</p>}
         <Suspense>
         {view === "settings" ? (
           <SettingsView key={root} /* fields reload when the workspace switches */ />
